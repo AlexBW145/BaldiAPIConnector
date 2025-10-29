@@ -20,7 +20,7 @@ namespace APIConnector;
 [BepInPlugin(PluginInfo.PLUGIN_GUID, PluginInfo.PLUGIN_NAME, PluginInfo.PLUGIN_VERSION)]
 [BepInDependency("mtm101.rulerp.bbplus.baldidevapi", "8.1.0.0")]
 [BepInDependency("thinkerAPI", "1.0.0.0")]
-[BepInIncompatibility("OurWindowsFragiled")] // Thinker, why the fuck did you add in an enum extension system in Fragile Windows??
+[BepInDependency("OurWindowsFragiled", BepInDependency.DependencyFlags.SoftDependency)]
 [BepInProcess("BALDI.exe")]
 public class ConnectorBasicsPlugin : BaseUnityPlugin
 {
@@ -30,6 +30,8 @@ public class ConnectorBasicsPlugin : BaseUnityPlugin
     {
         Harmony harmony = new Harmony(PluginInfo.PLUGIN_GUID);
         harmony.PatchAllConditionals();
+        if (Chainloader.PluginInfos.ContainsKey("OurWindowsFragiled")) // The generics are hardmode...
+            harmony.Patch(typeof(brobowindowsmod.ENanmEXTENDED).GetMethod(nameof(brobowindowsmod.ENanmEXTENDED.GetAnEnumThatDoesntExist)).MakeGenericMethod(typeof(Enum)), transpiler: new HarmonyMethod(AccessTools.Method(typeof(FragilePatches), "Why")));
 
         IEnumerator Postdoings()
         {

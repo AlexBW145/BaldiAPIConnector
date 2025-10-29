@@ -1,33 +1,39 @@
-﻿/*using HarmonyLib;
-using System.Collections.Generic;
+﻿using brobowindowsmod;
+using HarmonyLib;
 using MTM101BaldAPI;
-using System.Reflection.Emit;
 using System;
-using brobowindowsmod;
+using System.Collections.Generic;
+using System.Reflection;
+using System.Reflection.Emit;
+using System.Xml.Linq;
 using ThinkerAPI;
 
 namespace APIConnector;
 
 [ConditionalPatchMod("OurWindowsFragiled"), HarmonyPatch]
-class FragilePatches
+internal class FragilePatches
 {
-    [HarmonyPatch(typeof(brobowindowsmod.ENanmEXTENDED), nameof(brobowindowsmod.ENanmEXTENDED.GetAnEnumThatDoesntExist)), HarmonyTranspiler]
-    static IEnumerable<CodeInstruction> Why(IEnumerable<CodeInstruction> instructions) 
+    private static IEnumerable<CodeInstruction> Why(IEnumerable<CodeInstruction> instructions)  // Thinker, why the fuck did you add in an enum extension system in Fragile Windows??
     {
-        CodeInstruction generic = null;
-        foreach (var instruction in instructions)
+        // Useless but I want to keep it.
+        var instructionMatch = new CodeMatcher(instructions);
+        instructionMatch.Start().MatchForward(true, new CodeMatch(x => x.opcode == OpCodes.Ldtoken));
+        var generic = instructionMatch.Instruction.operand;
+        //
+        return new List<CodeInstruction>()
         {
-            if (instruction.opcode == OpCodes.Ldtoken)
-            {
-                generic = instruction;
-                break;
-            }
-        }
-        yield return new CodeInstruction(OpCodes.Nop);
-        yield return generic;
-        yield return new CodeInstruction(OpCodes.Ldarg_0);
-        yield return new CodeInstruction(OpCodes.Callvirt, AccessTools.Method(typeof(ThinkerAPI.ENanmEXTENDED), nameof(ThinkerAPI.ENanmEXTENDED.GetAnEnumThatDoesntExist), [typeof(string)]));
-        yield return new CodeInstruction(OpCodes.Ret);
-        yield break;
+            new CodeInstruction(OpCodes.Nop),
+            new CodeInstruction(OpCodes.Ldarg_0),
+            new CodeInstruction(OpCodes.Callvirt, AccessTools.Method(typeof(ThinkerAPI.ENanmEXTENDED), nameof(ThinkerAPI.ENanmEXTENDED.GetAnEnumThatDoesntExist), [typeof(string)], [typeof(Enum)])),
+            new CodeInstruction(OpCodes.Ret)
+        };
     }
-}*/
+
+    [HarmonyPatch(typeof(FragileWindowBase), nameof(FragileWindowBase.MakeWindowWorld)), HarmonyPostfix]
+    private static void WindowWorldEnumSetToUnique(ref LevelObject __result)
+    {
+        if (!EnumExtensions.EnumWithExtendedNameExists<LevelType>("WindowWorld"))
+            EnumExtensions.ExtendEnum<LevelType>("WindowWorld");
+        __result.type = EnumExtensions.GetFromExtendedName<LevelType>("WindowWorld");
+    }
+}
