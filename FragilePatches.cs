@@ -3,10 +3,7 @@ using HarmonyLib;
 using MTM101BaldAPI;
 using System;
 using System.Collections.Generic;
-using System.Reflection;
 using System.Reflection.Emit;
-using System.Xml.Linq;
-using ThinkerAPI;
 
 namespace APIConnector;
 
@@ -36,4 +33,6 @@ internal class FragilePatches
             EnumExtensions.ExtendEnum<LevelType>("WindowWorld");
         __result.type = EnumExtensions.GetFromExtendedName<LevelType>("WindowWorld");
     }
+
+    internal static void PatchFragile(Harmony harmony) => harmony.Patch(typeof(brobowindowsmod.ENanmEXTENDED).GetMethod(nameof(brobowindowsmod.ENanmEXTENDED.GetAnEnumThatDoesntExist)).MakeGenericMethod(typeof(Enum)), transpiler: new HarmonyMethod(AccessTools.Method(typeof(FragilePatches), "Why")));  
 }

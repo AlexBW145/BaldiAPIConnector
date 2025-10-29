@@ -8,11 +8,8 @@ using ThinkerAPI;
 using System.Collections;
 using UnityEngine;
 using BepInEx.Bootstrap;
-using UnityEngine.SceneManagement;
-using MTM101BaldAPI.Reflection;
 using System.Linq;
 using System.Reflection;
-using System;
 using System.Collections.Generic;
 
 namespace APIConnector;
@@ -35,7 +32,7 @@ public class ConnectorBasicsPlugin : BaseUnityPlugin
         Harmony harmony = new Harmony(PLUGIN_GUID);
         harmony.PatchAllConditionals();
         if (Chainloader.PluginInfos.ContainsKey("OurWindowsFragiled")) // The generics are hardmode...
-            harmony.Patch(typeof(brobowindowsmod.ENanmEXTENDED).GetMethod(nameof(brobowindowsmod.ENanmEXTENDED.GetAnEnumThatDoesntExist)).MakeGenericMethod(typeof(Enum)), transpiler: new HarmonyMethod(AccessTools.Method(typeof(FragilePatches), "Why")));
+            FragilePatches.PatchFragile(harmony);
 
         IEnumerator Postdoings()
         {
