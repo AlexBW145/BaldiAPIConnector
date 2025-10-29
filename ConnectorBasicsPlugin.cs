@@ -17,18 +17,22 @@ using System.Collections.Generic;
 
 namespace APIConnector;
 
-[BepInPlugin(PluginInfo.PLUGIN_GUID, PluginInfo.PLUGIN_NAME, PluginInfo.PLUGIN_VERSION)]
+[BepInPlugin(PLUGIN_GUID, PLUGIN_NAME, PLUGIN_VERSION)]
 [BepInDependency("mtm101.rulerp.bbplus.baldidevapi", "8.1.0.0")]
 [BepInDependency("thinkerAPI", "1.0.0.0")]
 [BepInDependency("OurWindowsFragiled", BepInDependency.DependencyFlags.SoftDependency)]
 [BepInProcess("BALDI.exe")]
 public class ConnectorBasicsPlugin : BaseUnityPlugin
 {
+    private const string PLUGIN_GUID = "alexbw145.bbplus.apiconnector";
+    private const string PLUGIN_NAME = "ThinkerAPI + MTM101API Connector";
+    private const string PLUGIN_VERSION = "0.1.1.0";
+
     internal static bool Connected = false;
     internal static bool Doings = false;
     private void Awake()
     {
-        Harmony harmony = new Harmony(PluginInfo.PLUGIN_GUID);
+        Harmony harmony = new Harmony(PLUGIN_GUID);
         harmony.PatchAllConditionals();
         if (Chainloader.PluginInfos.ContainsKey("OurWindowsFragiled")) // The generics are hardmode...
             harmony.Patch(typeof(brobowindowsmod.ENanmEXTENDED).GetMethod(nameof(brobowindowsmod.ENanmEXTENDED.GetAnEnumThatDoesntExist)).MakeGenericMethod(typeof(Enum)), transpiler: new HarmonyMethod(AccessTools.Method(typeof(FragilePatches), "Why")));
@@ -94,11 +98,4 @@ public class ConnectorBasicsPlugin : BaseUnityPlugin
         LoadingEvents.RegisterOnAssetsLoaded(Info, WindowPeeBugManager.InitializeWPD, LoadingEventOrder.Post);
         LoadingEvents.RegisterOnAssetsLoaded(Info, Savefixes(), LoadingEventOrder.Final);
     }
-}
-
-public static class PluginInfo
-{
-    public const string PLUGIN_GUID = "alexbw145.bbplus.apiconnector";
-    public const string PLUGIN_NAME = "ThinkerAPI + MTM101API Connector";
-    public const string PLUGIN_VERSION = "0.1.0.0";
 }
