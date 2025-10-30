@@ -5,16 +5,18 @@ using MTM101BaldAPI.Registers;
 using ThinkerAPI;
 using System;
 using System.Collections.Generic;
-using MTM101BaldAPI.Reflection;
 using UnityEngine;
 using System.IO;
 using MTM101BaldAPI.AssetTools;
+using System.Reflection.Emit;
+using System.Reflection;
 
 namespace APIConnector;
 
 [HarmonyPatch]
-class ThinkerAPIPatches
+internal class ThinkerAPIPatches
 {
+
     [HarmonyPatch(typeof(WindowPeeBugManager), nameof(WindowPeeBugManager.InitializeWPD)), HarmonyPrefix]
     static bool DoExtraStuffPlusPinedebugSupportInit() // Considering that his code is that messy...
     {
@@ -27,8 +29,8 @@ class ThinkerAPIPatches
                     flags |= RandomEventFlags.RoomSpecific | RandomEventFlags.AffectsGenerator;
                 if (eventt.floorNames.Count <= 0)
                     flags |= RandomEventFlags.Special;
-                eventt.eventscript.ReflectionSetVariable("eventType", EnumExtensions.ExtendEnum<RandomEventType>(eventt.eventname.Replace(" ", "")));
-                RandomEventMetaStorage.Instance.Add(new RandomEventMetadata(Chainloader.PluginInfos[(string)AccessTools.DeclaredField(typeof(MassObjectHolder), "modImIn").GetValue(eventt.moh)], eventt.eventscript, flags));
+                //eventt.eventscript.ReflectionSetVariable("eventType", EnumExtensions.ExtendEnum<RandomEventType>(eventt.eventname.Replace(" ", "")));
+                RandomEventMetaStorage.Instance.Add(new RandomEventMetadata(Chainloader.PluginInfos[(string)modItsIn.GetValue(eventt.moh)], eventt.eventscript, flags));
             }
             return false;
         }
@@ -37,19 +39,17 @@ class ThinkerAPIPatches
             PineDebugSupport.Initalize();*/
     }
 
-    /*[HarmonyPatch(typeof(ENanmEXTENDED), "ConnectorHelper")]
-    [HarmonyPostfix]
-    private static void AdvancedFixer(Type enumType, string extendedName)
+    [HarmonyPatch]
+    static IEnumerable<CodeInstruction> EnumFromMissedTheTexture(IEnumerable<CodeInstruction> instructions)
     {
-        if (enumType.GetType() == typeof(RandomEventType))
-            EnumExtensions.ExtendEnum<RandomEventType>(extendedName);
-        else if (enumType.GetType() == typeof(Items))
-            EnumExtensions.ExtendEnum<Items>(extendedName);
-        else if (enumType.GetType() == typeof(Character))
-            EnumExtensions.ExtendEnum<Character>(extendedName);
-        else if (enumType.GetType() == typeof(LevelType))
-            EnumExtensions.ExtendEnum<LevelType>(extendedName);
-    }*/
+        return new List<CodeInstruction>()
+        {
+            new CodeInstruction(OpCodes.Nop),
+            new CodeInstruction(OpCodes.Ldarg_0),
+            new CodeInstruction(OpCodes.Call, AccessTools.Method(typeof(EnumExtensions), nameof(EnumExtensions.ExtendEnum), [typeof(string)], [ConnectorBasicsPlugin.genericParams[ConnectorBasicsPlugin.myCurrentParam]])),
+            new CodeInstruction(OpCodes.Ret)
+        };
+    }
 
     [HarmonyPatch(typeof(thinkerAPI), "LoadSavedCaptions"), HarmonyPrefix]
     static bool LoadDaCaptions(ref List<string> ___captionpaths)
@@ -116,13 +116,16 @@ class ThinkerAPIPatches
     }
 #endif
 
+    private static FieldInfo modItsIn = AccessTools.DeclaredField(typeof(MassObjectHolder), "modImIn");
+    private static FieldInfo _Character = AccessTools.Field(typeof(NPC), "character");
+
     [HarmonyPatch(typeof(thinkerAPI), nameof(thinkerAPI.CreateNPC)), HarmonyPostfix]
     static void AddToMetaDataNPC(BasicNPCTemplate bit, ref NPC __result)
     {
         __result.enabled = true; // It was the radar's fault! I blame two people for this incompat!
         if (NPCMetaStorage.Instance.Find(npc => npc.character.ToStringExtended() == bit.enumname) != null)
         {
-            AccessTools.Field(typeof(NPC), "character").SetValue(__result, EnumExtensions.GetFromExtendedName<Character>(bit.enumname));
+            _Character.SetValue(__result, EnumExtensions.GetFromExtendedName<Character>(bit.enumname));
             NPCMetaStorage.Instance.Get(__result.Character).prefabs.Add(bit.name, __result);
             return;
         }
@@ -133,8 +136,7 @@ class ThinkerAPIPatches
             flags |= NPCFlags.HasTrigger;
         if (bit.looker)
             flags |= NPCFlags.CanSee;
-        AccessTools.Field(typeof(NPC), "character").SetValue(__result, EnumExtensions.ExtendEnum<Character>(bit.enumname)); // Temporary because the method is generic and is hard to patch
-        NPCMetaStorage.Instance.Add(new NPCMetadata(Chainloader.PluginInfos[(string)AccessTools.DeclaredField(typeof(MassObjectHolder), "modImIn").GetValue(bit.moh)], [__result], bit.name, flags));
+        NPCMetaStorage.Instance.Add(new NPCMetadata(Chainloader.PluginInfos[(string)modItsIn.GetValue(bit.moh)], [__result], bit.name, flags));
     }
 
     [HarmonyPatch(typeof(thinkerAPI), nameof(thinkerAPI.CreateItem)), HarmonyPostfix]
@@ -153,8 +155,7 @@ class ThinkerAPIPatches
         /*if (bit.itemType.Equals(typeof(Item)))
             flags |= ItemFlags.NoUses;*/
         // Is there a way for persistant & multiple use items??
-        __result.itemType = EnumExtensions.ExtendEnum<Items>(bit.enumName);
-        var meta = new ItemMetaData(Chainloader.PluginInfos[(string)AccessTools.DeclaredField(typeof(MassObjectHolder), "modImIn").GetValue(bit.moh)], __result);
+        var meta = new ItemMetaData(Chainloader.PluginInfos[(string)modItsIn.GetValue(bit.moh)], __result);
         meta.flags = flags;
         ItemMetaStorage.Instance.Add(meta);
     }

@@ -1,16 +1,16 @@
 ﻿using BepInEx;
+using BepInEx.Bootstrap;
 using HarmonyLib;
 using MTM101BaldAPI;
-using MTM101BaldAPI.AssetTools;
 using MTM101BaldAPI.Registers;
 using MTM101BaldAPI.SaveSystem;
-using ThinkerAPI;
+using System;
 using System.Collections;
-using UnityEngine;
-using BepInEx.Bootstrap;
+using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using System.Collections.Generic;
+using ThinkerAPI;
+using UnityEngine;
 
 namespace APIConnector;
 
@@ -23,16 +23,26 @@ public class ConnectorBasicsPlugin : BaseUnityPlugin
 {
     private const string PLUGIN_GUID = "alexbw145.bbplus.apiconnector";
     private const string PLUGIN_NAME = "ThinkerAPI + MTM101API Connector";
-    private const string PLUGIN_VERSION = "0.1.1.0";
+    private const string PLUGIN_VERSION = "0.2.0.0";
 
     internal static bool Connected = false;
     internal static bool Doings = false;
+    internal static readonly Type[] genericParams = [typeof(Character), typeof(Items), typeof(RandomEventType), typeof(LevelType), typeof(PassableObstacle), typeof(RoomCategory)]; // Most used enums
+    internal static int myCurrentParam = 0; // Ok why??
     private void Awake()
     {
         Harmony harmony = new Harmony(PLUGIN_GUID);
+        myCurrentParam = 0;
+        foreach (var _enum in genericParams) // Found out how, couldn't figure out how to grab enum types appropiately.
+        {
+            harmony.Patch(AccessTools.Method(typeof(ENanmEXTENDED), nameof(ENanmEXTENDED.GetAnEnumThatDoesntExist), [typeof(string)], [_enum]), transpiler: new HarmonyMethod(AccessTools.Method(typeof(ThinkerAPIPatches), "EnumFromMissedTheTexture")));
+            myCurrentParam++;
+        }
         harmony.PatchAllConditionals();
-        if (Chainloader.PluginInfos.ContainsKey("OurWindowsFragiled")) // The generics are hardmode...
+        // The generics are hardmode...
+        if (Chainloader.PluginInfos.ContainsKey("OurWindowsFragiled"))
             FragilePatches.PatchFragile(harmony);
+        //
 
         IEnumerator Postdoings()
         {
@@ -47,13 +57,13 @@ public class ConnectorBasicsPlugin : BaseUnityPlugin
             DestroyImmediate(menu);
             nameentry.name = "NameEntry";
             yield return "Adding save handlers and scene generator enqueues...";
-            List<LevelType> extendedEnums = new List<LevelType>();
+            /*List<LevelType> extendedEnums = new List<LevelType>();
             if (ENanmEXTENDED.counts.Keys.Contains(typeof(LevelType)))
             { // Patches to generic methods with generic returns are hard...
 
                 foreach (var name in ENanmEXTENDED.counts[typeof(LevelType)].names)
                     extendedEnums.Add(EnumExtensions.ExtendEnum<LevelType>(name));
-            }
+            }*/
             foreach (var thinkPlugins in Chainloader.PluginInfos.Values)
             {
                 if (thinkPlugins.Metadata.GUID == thinkerAPI.Instance.Info.Metadata.GUID) continue;
@@ -65,11 +75,12 @@ public class ConnectorBasicsPlugin : BaseUnityPlugin
                     foreach (var scene in thinkPlugins.Instance.GetType().GetFields(BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic).ToList().FindAll(x => x.FieldType.Equals(typeof(SceneObject))))
                     {
                         var gottenscene = (SceneObject)scene.GetValue(thinkPlugins.Instance);
+                        if (SceneObjectMetaStorage.Instance.Get(gottenscene) != null) continue;
                         foreach (var levelObject in gottenscene.GetCustomLevelObjects()) // This is better... I think?
                         {
-                            if ((int)levelObject.type >= 123 && ENanmEXTENDED.counts[typeof(LevelType)].names[(int)levelObject.type - 123] == extendedEnums[(int)levelObject.type - 123].ToStringExtended())
+                            /*if ((int)levelObject.type >= 123 && ENanmEXTENDED.counts[typeof(LevelType)].names[(int)levelObject.type - 123] == extendedEnums[(int)levelObject.type - 123].ToStringExtended())
                                 levelObject.type = extendedEnums[(int)levelObject.type - 123];
-                            else if ((int)levelObject.type > 0 && (int)levelObject.type < 4) // Custom level objects that have does not use a extended enum. (I blame Skid for that)
+                            else*/ if ((int)levelObject.type > 0 && (int)levelObject.type < 4) // Custom level objects that have does not use a extended enum. (I blame Skid for that)
                                 levelObject.type = EnumExtensions.ExtendEnum<LevelType>("UnknownType_" + levelObject.name); // Not to be confused with assigning things horribly.
                             weAlreadyGotToThat.Add(levelObject);
                         }
@@ -79,11 +90,11 @@ public class ConnectorBasicsPlugin : BaseUnityPlugin
                     }
                 }
             }
-            foreach (var levelObject in SceneObjectMetaStorage.Instance.FindAll(x => x.title == "F4" || x.title == "F5").SelectMany(x => x.value.GetCustomLevelObjects())) // Now I realized that I am forgetting something...
+            /*foreach (var levelObject in SceneObjectMetaStorage.Instance.FindAll(x => x.title == "F4" || x.title == "F5").SelectMany(x => x.value.GetCustomLevelObjects())) // Now I realized that I am forgetting something...
             {
                 if ((int)levelObject.type >= 123 && ENanmEXTENDED.counts[typeof(LevelType)].names[(int)levelObject.type - 123] == extendedEnums[(int)levelObject.type - 123].ToStringExtended())
                     levelObject.type = extendedEnums[(int)levelObject.type - 123];
-            }
+            }*/
         }
         IEnumerator Savefixes()
         {

@@ -1,7 +1,6 @@
 ﻿using brobowindowsmod;
 using HarmonyLib;
 using MTM101BaldAPI;
-using System;
 using System.Collections.Generic;
 using System.Reflection.Emit;
 
@@ -21,7 +20,7 @@ internal class FragilePatches
         {
             new CodeInstruction(OpCodes.Nop),
             new CodeInstruction(OpCodes.Ldarg_0),
-            new CodeInstruction(OpCodes.Callvirt, AccessTools.Method(typeof(ThinkerAPI.ENanmEXTENDED), nameof(ThinkerAPI.ENanmEXTENDED.GetAnEnumThatDoesntExist), [typeof(string)], [typeof(Enum)])),
+            new CodeInstruction(OpCodes.Call, AccessTools.Method(typeof(ThinkerAPI.ENanmEXTENDED), nameof(ThinkerAPI.ENanmEXTENDED.GetAnEnumThatDoesntExist), [typeof(string)], [ConnectorBasicsPlugin.genericParams[ConnectorBasicsPlugin.myCurrentParam]])),
             new CodeInstruction(OpCodes.Ret)
         };
     }
@@ -34,5 +33,13 @@ internal class FragilePatches
         __result.type = EnumExtensions.GetFromExtendedName<LevelType>("WindowWorld");
     }
 
-    internal static void PatchFragile(Harmony harmony) => harmony.Patch(typeof(brobowindowsmod.ENanmEXTENDED).GetMethod(nameof(brobowindowsmod.ENanmEXTENDED.GetAnEnumThatDoesntExist)).MakeGenericMethod(typeof(Enum)), transpiler: new HarmonyMethod(AccessTools.Method(typeof(FragilePatches), "Why")));  
+    internal static void PatchFragile(Harmony harmony)
+    {
+        ConnectorBasicsPlugin.myCurrentParam = 0;
+        foreach (var _enum in ConnectorBasicsPlugin.genericParams)
+        {
+            harmony.Patch(AccessTools.Method(typeof(brobowindowsmod.ENanmEXTENDED), nameof(brobowindowsmod.ENanmEXTENDED.GetAnEnumThatDoesntExist), [typeof(string)], [_enum]), transpiler: new HarmonyMethod(AccessTools.Method(typeof(FragilePatches), "Why")));
+            ConnectorBasicsPlugin.myCurrentParam++;
+        }
+    }
 }
