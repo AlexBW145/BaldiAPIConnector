@@ -42,11 +42,15 @@ internal class ThinkerAPIPatches
     [HarmonyPatch]
     static IEnumerable<CodeInstruction> EnumFromMissedTheTexture(IEnumerable<CodeInstruction> instructions)
     {
+        var instructionMatch = new CodeMatcher(instructions);
+        instructionMatch.Start().MatchForward(true, new CodeMatch(x => x.opcode == OpCodes.Ldtoken));
+        var generic = instructionMatch.Instruction.operand;
+        var enumType = AccessTools.TypeByName(generic.ToString());
         return new List<CodeInstruction>()
         {
             new CodeInstruction(OpCodes.Nop),
             new CodeInstruction(OpCodes.Ldarg_0),
-            new CodeInstruction(OpCodes.Call, AccessTools.Method(typeof(EnumExtensions), nameof(EnumExtensions.ExtendEnum), [typeof(string)], [ConnectorBasicsPlugin.genericParams[ConnectorBasicsPlugin.myCurrentParam]])),
+            new CodeInstruction(OpCodes.Call, AccessTools.Method(typeof(EnumExtensions), nameof(EnumExtensions.ExtendEnum), [typeof(string)], [enumType])),
             new CodeInstruction(OpCodes.Ret)
         };
     }

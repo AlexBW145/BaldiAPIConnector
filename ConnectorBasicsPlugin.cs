@@ -4,7 +4,6 @@ using HarmonyLib;
 using MTM101BaldAPI;
 using MTM101BaldAPI.Registers;
 using MTM101BaldAPI.SaveSystem;
-using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -23,25 +22,20 @@ public class ConnectorBasicsPlugin : BaseUnityPlugin
 {
     private const string PLUGIN_GUID = "alexbw145.bbplus.apiconnector";
     private const string PLUGIN_NAME = "ThinkerAPI + MTM101API Connector";
-    private const string PLUGIN_VERSION = "0.2.0.0";
+    private const string PLUGIN_VERSION = "0.2.1.0";
 
     internal static bool Connected = false;
     internal static bool Doings = false;
-    internal static readonly Type[] genericParams = [typeof(Character), typeof(Items), typeof(RandomEventType), typeof(LevelType), typeof(PassableObstacle), typeof(RoomCategory)]; // Most used enums
-    internal static int myCurrentParam = 0; // Ok why??
     private void Awake()
     {
         Harmony harmony = new Harmony(PLUGIN_GUID);
-        myCurrentParam = 0;
-        foreach (var _enum in genericParams) // Found out how, couldn't figure out how to grab enum types appropiately.
-        {
+        Assembly[] assemblies = [Assembly.GetAssembly(typeof(Baldi)), ..AccessTools.AllTypes().Where(x => x.IsSubclassOf(typeof(BaseUnityPlugin))).Select(x => x.Assembly)]; // So I did this instead??
+        foreach (var _enum in AccessTools.AllTypes().Where(x => x.IsEnum && assemblies.Contains(x.Assembly))) // Found out how, but couldn't figure out HOW to exclude system & unity package enums.
             harmony.Patch(AccessTools.Method(typeof(ENanmEXTENDED), nameof(ENanmEXTENDED.GetAnEnumThatDoesntExist), [typeof(string)], [_enum]), transpiler: new HarmonyMethod(AccessTools.Method(typeof(ThinkerAPIPatches), "EnumFromMissedTheTexture")));
-            myCurrentParam++;
-        }
         harmony.PatchAllConditionals();
         // The generics are hardmode...
         if (Chainloader.PluginInfos.ContainsKey("OurWindowsFragiled"))
-            FragilePatches.PatchFragile(harmony);
+            FragilePatches.PatchFragile(harmony, assemblies);
         //
 
         IEnumerator Postdoings()
