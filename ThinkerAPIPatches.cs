@@ -123,28 +123,6 @@ internal class ThinkerAPIPatches
 #endif
 
     private static FieldInfo modItsIn = AccessTools.DeclaredField(typeof(MassObjectHolder), "modImIn");
-    private static FieldInfo _Character = AccessTools.Field(typeof(NPC), "character");
-#if false
-    [HarmonyPatch(typeof(thinkerAPI), nameof(thinkerAPI.CreateNPC)), HarmonyPostfix]
-    static void AddToMetaDataNPC(BasicNPCTemplate bit, ref NPC __result)
-    {
-        __result.enabled = true; // It was the radar's fault! I blame two people for this incompat!
-        if (NPCMetaStorage.Instance.Find(npc => npc.character.ToStringExtended() == bit.enumname) != null)
-        {
-            _Character.SetValue(__result, EnumExtensions.GetFromExtendedName<Character>(bit.enumname));
-            NPCMetaStorage.Instance.Get(__result.Character).prefabs.Add(bit.name, __result);
-            return;
-        }
-        NPCFlags flags = NPCFlags.CanMove | NPCFlags.HasSprite;
-        if (bit.stationary)
-            flags &= ~NPCFlags.CanMove;
-        if (bit.trigger)
-            flags |= NPCFlags.HasTrigger;
-        if (bit.looker && bit.sightdistance > 0)
-            flags |= NPCFlags.CanSee;
-        NPCMetaStorage.Instance.Add(new NPCMetadata(Chainloader.PluginInfos[(string)modItsIn.GetValue(bit.moh)], [__result], bit.name, flags));
-    }
-#else
     [HarmonyPatch(typeof(thinkerAPI), nameof(thinkerAPI.CreateNPC)), HarmonyPrefix]
     static bool AddToMetaDataNPC(ref BasicNPCTemplate bit, ref NPC __result)
     {
@@ -179,30 +157,7 @@ internal class ThinkerAPIPatches
         __result = (NPC)type.GetMethod("Build").Invoke(builder, []);
         return false;
     }
-#endif
 
-#if false
-    [HarmonyPatch(typeof(thinkerAPI), nameof(thinkerAPI.CreateItem)), HarmonyPostfix]
-    static void AddToMetaDataItem(BasicItemTemplate bit, ref ItemObject __result)
-    {
-        if (ItemMetaStorage.Instance.Find(item => item.id.ToStringExtended() == bit.enumName) != null)
-        {
-            __result.itemType = EnumExtensions.GetFromExtendedName<Items>(bit.enumName);
-            var array = ItemMetaStorage.Instance.FindByEnum(__result.itemType).itemObjects;
-            ItemMetaStorage.Instance.FindByEnum(__result.itemType).itemObjects = [__result, .. array];
-            return;
-        }
-        ItemFlags flags = ItemFlags.None;
-        if (bit.instantuse)
-            flags |= ItemFlags.InstantUse;
-        /*if (bit.itemType.Equals(typeof(Item)))
-            flags |= ItemFlags.NoUses;*/
-        // Is there a way for persistant & multiple use items??
-        var meta = new ItemMetaData(Chainloader.PluginInfos[(string)modItsIn.GetValue(bit.moh)], __result);
-        meta.flags = flags;
-        ItemMetaStorage.Instance.Add(meta);
-    }
-#else
     [HarmonyPatch(typeof(thinkerAPI), nameof(thinkerAPI.CreateItem)), HarmonyPrefix]
     static bool AddToMetaDataItem(ref BasicItemTemplate bit, ref ItemObject __result)
     {
@@ -222,5 +177,4 @@ internal class ThinkerAPIPatches
         __result = builder.Build();
         return false;
     }
-#endif
 }
