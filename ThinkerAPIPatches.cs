@@ -10,6 +10,8 @@ using System.IO;
 using MTM101BaldAPI.AssetTools;
 using System.Reflection.Emit;
 using System.Reflection;
+using MTM101BaldAPI.ObjectCreation;
+using BepInEx;
 
 namespace APIConnector;
 
@@ -122,7 +124,7 @@ internal class ThinkerAPIPatches
 
     private static FieldInfo modItsIn = AccessTools.DeclaredField(typeof(MassObjectHolder), "modImIn");
     private static FieldInfo _Character = AccessTools.Field(typeof(NPC), "character");
-
+#if false
     [HarmonyPatch(typeof(thinkerAPI), nameof(thinkerAPI.CreateNPC)), HarmonyPostfix]
     static void AddToMetaDataNPC(BasicNPCTemplate bit, ref NPC __result)
     {
@@ -138,11 +140,48 @@ internal class ThinkerAPIPatches
             flags &= ~NPCFlags.CanMove;
         if (bit.trigger)
             flags |= NPCFlags.HasTrigger;
-        if (bit.looker)
+        if (bit.looker && bit.sightdistance > 0)
             flags |= NPCFlags.CanSee;
         NPCMetaStorage.Instance.Add(new NPCMetadata(Chainloader.PluginInfos[(string)modItsIn.GetValue(bit.moh)], [__result], bit.name, flags));
     }
+#else
+    [HarmonyPatch(typeof(thinkerAPI), nameof(thinkerAPI.CreateNPC)), HarmonyPrefix]
+    static bool AddToMetaDataNPC(ref BasicNPCTemplate bit, ref NPC __result)
+    {
+        var type = typeof(NPCBuilder<>).MakeGenericType(bit.npcType);
+        var builder = type.GetConstructor([typeof(PluginInfo)]).Invoke([Chainloader.PluginInfos[(string)modItsIn.GetValue(bit.moh)]]);
+        type.GetMethod("SetName", [typeof(string)]).Invoke(builder, [bit.name]);
+        type.GetMethod("SetEnum", [typeof(string)]).Invoke(builder, [bit.enumname]);
+        type.GetMethod("SetPoster", [typeof(Texture2D), typeof(string), typeof(string)]).Invoke(builder, [bit.poster, bit.nameKey, bit.descKey]);
+        type.GetMethod("AddSpawnableRoomCategories", [typeof(RoomCategory[])]).Invoke(builder, [bit.spawnroom]);
+        type.GetMethod("SetMinMaxAudioDistance", [typeof(float), typeof(float)]).Invoke(builder, [bit.minaudiodistance, bit.maxaudiodistance]);
+        type.GetMethod("SetMaxSightDistance", [typeof(float)]).Invoke(builder, [bit.sightdistance]);
+        type.GetMethod("AddPotentialRoomAssets", [typeof(WeightedRoomAsset[])]).Invoke(builder, [bit.requireroom]);
+        type.GetMethod("SetFOV", [typeof(float)]).Invoke(builder, [bit.fov <= 0f ? -1f : bit.fov]); // The way that ThinkerAPI sets the fov is "above 0f" and not "above or equals to 0f"
+        if (bit.stationary) // The part where if statements has no else statements.
+            type.GetMethod("SetStationary").Invoke(builder, []);
+        if (bit.looker)
+            type.GetMethod("AddLooker").Invoke(builder, []);
+        if (bit.useheatmap)
+            type.GetMethod("AddHeatmap").Invoke(builder, []);
+        if (bit.accelerates)
+            type.GetMethod("EnableAcceleration").Invoke(builder, []);
+        if (bit.airborne)
+            type.GetMethod("SetAirborne").Invoke(builder, []);
+        if (bit.trigger)
+            type.GetMethod("AddTrigger").Invoke(builder, []);
+        if (!bit.autorotate)
+            type.GetMethod("DisableAutoRotation").Invoke(builder, []);
+        if (bit.dontwaittospawn)
+            type.GetMethod("IgnorePlayerOnSpawn").Invoke(builder, []);
+        if (!bit.precisenavigation)
+            type.GetMethod("DisableNavigationPrecision").Invoke(builder, []);
+        __result = (NPC)type.GetMethod("Build").Invoke(builder, []);
+        return false;
+    }
+#endif
 
+#if false
     [HarmonyPatch(typeof(thinkerAPI), nameof(thinkerAPI.CreateItem)), HarmonyPostfix]
     static void AddToMetaDataItem(BasicItemTemplate bit, ref ItemObject __result)
     {
@@ -163,4 +202,25 @@ internal class ThinkerAPIPatches
         meta.flags = flags;
         ItemMetaStorage.Instance.Add(meta);
     }
+#else
+    [HarmonyPatch(typeof(thinkerAPI), nameof(thinkerAPI.CreateItem)), HarmonyPrefix]
+    static bool AddToMetaDataItem(ref BasicItemTemplate bit, ref ItemObject __result)
+    {
+        var type = typeof(ItemBuilder);
+        var builder = new ItemBuilder(Chainloader.PluginInfos[(string)modItsIn.GetValue(bit.moh)])
+            .SetNameAndDescription(bit.nameKey, bit.descKey)
+            .SetEnum(bit.enumName)
+            .SetSprites(bit.smallSprite, bit.largeSprite)
+            .SetShopPrice(bit.shopPrice)
+            .SetGeneratorCost(bit.genCost);
+        if (bit.pickup != null)
+            builder.SetPickupSound(bit.pickup);
+        if (bit.instantuse)
+            builder.SetAsInstantUse();
+        type.GetMethod("SetItemComponent", []).MakeGenericMethod(bit.itemType).Invoke(builder, []);
+        // ThinkerAPI is missing `overrideDisabled` which Eco Friendly stupidly patches something so that it can be used in Pitstop FOR NO REASON.
+        __result = builder.Build();
+        return false;
+    }
+#endif
 }

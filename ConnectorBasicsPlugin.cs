@@ -4,6 +4,7 @@ using HarmonyLib;
 using MTM101BaldAPI;
 using MTM101BaldAPI.Registers;
 using MTM101BaldAPI.SaveSystem;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -14,7 +15,7 @@ using UnityEngine;
 namespace APIConnector;
 
 [BepInPlugin(PLUGIN_GUID, PLUGIN_NAME, PLUGIN_VERSION)]
-[BepInDependency("mtm101.rulerp.bbplus.baldidevapi", "8.1.0.0")]
+[BepInDependency("mtm101.rulerp.bbplus.baldidevapi", "10.0.0.0")]
 [BepInDependency("thinkerAPI", "1.0.0.0")]
 [BepInDependency("OurWindowsFragiled", BepInDependency.DependencyFlags.SoftDependency)]
 [BepInProcess("BALDI.exe")]
@@ -51,17 +52,10 @@ public class ConnectorBasicsPlugin : BaseUnityPlugin
             DestroyImmediate(menu);
             nameentry.name = "NameEntry";
             yield return "Adding save handlers and scene generator enqueues...";
-            /*List<LevelType> extendedEnums = new List<LevelType>();
-            if (ENanmEXTENDED.counts.Keys.Contains(typeof(LevelType)))
-            { // Patches to generic methods with generic returns are hard...
-
-                foreach (var name in ENanmEXTENDED.counts[typeof(LevelType)].names)
-                    extendedEnums.Add(EnumExtensions.ExtendEnum<LevelType>(name));
-            }*/
             foreach (var thinkPlugins in Chainloader.PluginInfos.Values)
             {
                 if (thinkPlugins.Metadata.GUID == thinkerAPI.Instance.Info.Metadata.GUID) continue;
-                if (thinkPlugins.Instance.GetType().GetFields(BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public).ToList().Exists(x => x.FieldType.Equals(typeof(MassObjectHolder))))
+                if (thinkPlugins.Instance.GetType().GetFields(BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic).ToList().Exists(x => x.FieldType.Equals(typeof(MassObjectHolder))))
                 {
                     ModdedSaveGame.AddSaveHandler(thinkPlugins);
                     UnityEngine.Debug.Log($"Handling save for {thinkPlugins.Metadata.GUID}!");
@@ -70,17 +64,21 @@ public class ConnectorBasicsPlugin : BaseUnityPlugin
                     {
                         var gottenscene = (SceneObject)scene.GetValue(thinkPlugins.Instance);
                         if (SceneObjectMetaStorage.Instance.Get(gottenscene) != null) continue;
-                        foreach (var levelObject in gottenscene.GetCustomLevelObjects()) // This is better... I think?
+                        /*foreach (var levelObject in gottenscene.GetCustomLevelObjects()) // This is better... I think?
                         {
-                            /*if ((int)levelObject.type >= 123 && ENanmEXTENDED.counts[typeof(LevelType)].names[(int)levelObject.type - 123] == extendedEnums[(int)levelObject.type - 123].ToStringExtended())
+                            if ((int)levelObject.type >= 123 && ENanmEXTENDED.counts[typeof(LevelType)].names[(int)levelObject.type - 123] == extendedEnums[(int)levelObject.type - 123].ToStringExtended())
                                 levelObject.type = extendedEnums[(int)levelObject.type - 123];
-                            else*/ if ((int)levelObject.type > 0 && (int)levelObject.type < 4) // Custom level objects that have does not use a extended enum. (I blame Skid for that)
+                            else if ((int)levelObject.type > 0 && (int)levelObject.type < 4) // Custom level objects that does not use a extended enum.
                                 levelObject.type = EnumExtensions.ExtendEnum<LevelType>("UnknownType_" + levelObject.name); // Not to be confused with assigning things horribly.
                             weAlreadyGotToThat.Add(levelObject);
+                        }*/
+                        gottenscene.AddMeta(thinkPlugins.Instance, (gottenscene.levelTitle == "END" && gottenscene.manager is EndlessGameManager) ? ["endless"] : []);
+                        // `HideInInspector` (despite its actual purpose is not in during runtime) will make the connector consider the scene object unqueueable.
+                        if (!Attribute.IsDefined(scene, typeof(HideInInspector)))
+                        {
+                            GeneratorManagement.EnqueueGeneratorChanges(gottenscene);
+                            UnityEngine.Debug.Log($"Enqueuing generation changes for {scene.Name} from {thinkPlugins.Metadata.GUID}!");
                         }
-                        gottenscene.AddMeta(thinkPlugins.Instance, gottenscene.levelTitle == "END" ? ["endless"] : []);
-                        GeneratorManagement.EnqueueGeneratorChanges(gottenscene);
-                        UnityEngine.Debug.Log($"Enqueuing generation changes for {scene.Name} from {thinkPlugins.Metadata.GUID}!");
                     }
                 }
             }
