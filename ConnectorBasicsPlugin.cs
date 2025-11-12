@@ -23,7 +23,7 @@ public class ConnectorBasicsPlugin : BaseUnityPlugin
 {
     private const string PLUGIN_GUID = "alexbw145.bbplus.apiconnector";
     private const string PLUGIN_NAME = "ThinkerAPI + MTM101API Connector";
-    private const string PLUGIN_VERSION = "0.2.1.0";
+    private const string PLUGIN_VERSION = "0.2.1.1";
 
     internal static bool Connected = false;
     internal static bool Doings = false;
