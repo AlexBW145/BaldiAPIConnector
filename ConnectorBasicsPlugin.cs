@@ -31,7 +31,7 @@ public class ConnectorBasicsPlugin : BaseUnityPlugin
     {
         Harmony harmony = new Harmony(PLUGIN_GUID);
         Assembly[] assemblies = [Assembly.GetAssembly(typeof(Baldi)), ..AccessTools.AllTypes().Where(x => x.IsSubclassOf(typeof(BaseUnityPlugin))).Select(x => x.Assembly)]; // So I did this instead??
-        foreach (var _enum in AccessTools.AllTypes().Where(x => x.IsEnum && assemblies.Contains(x.Assembly))) // Found out how, but couldn't figure out HOW to exclude system & unity package enums.
+        foreach (var _enum in AccessTools.AllTypes().Where(x => x.IsEnum && assemblies.Contains(x.Assembly) && x.IsPublic)) // Found out how, but couldn't figure out HOW to exclude system & unity package enums.
             harmony.Patch(AccessTools.Method(typeof(ENanmEXTENDED), nameof(ENanmEXTENDED.GetAnEnumThatDoesntExist), [typeof(string)], [_enum]), transpiler: new HarmonyMethod(AccessTools.Method(typeof(ThinkerAPIPatches), "EnumFromMissedTheTexture")));
         harmony.PatchAllConditionals();
         // The generics are hardmode...

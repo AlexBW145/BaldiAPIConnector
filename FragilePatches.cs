@@ -38,7 +38,7 @@ internal class FragilePatches
 
     internal static void PatchFragile(Harmony harmony, Assembly[] assemblies)
     {
-        foreach (var _enum in AccessTools.AllTypes().Where(x => x.IsEnum && assemblies.Contains(x.Assembly)))
+        foreach (var _enum in AccessTools.AllTypes().Where(x => x.IsEnum && assemblies.Contains(x.Assembly) && x.IsPublic))
             harmony.Patch(AccessTools.Method(typeof(brobowindowsmod.ENanmEXTENDED), nameof(brobowindowsmod.ENanmEXTENDED.GetAnEnumThatDoesntExist), [typeof(string)], [_enum]), transpiler: new HarmonyMethod(AccessTools.Method(typeof(FragilePatches), "Why")));
     }
 }
