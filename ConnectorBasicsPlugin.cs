@@ -1,5 +1,6 @@
 ﻿using BepInEx;
 using BepInEx.Bootstrap;
+using BepInEx.Logging;
 using HarmonyLib;
 using MTM101BaldAPI;
 using MTM101BaldAPI.Registers;
@@ -23,7 +24,8 @@ public class ConnectorBasicsPlugin : BaseUnityPlugin
 {
     private const string PLUGIN_GUID = "alexbw145.bbplus.apiconnector";
     private const string PLUGIN_NAME = "ThinkerAPI + MTM101API Connector";
-    private const string PLUGIN_VERSION = "0.2.1.1";
+    private const string PLUGIN_VERSION = "0.2.1.2";
+    internal static ManualLogSource Log = new ManualLogSource("BaldiAPIConnector");
 
     internal static bool Connected = false;
     internal static bool Doings = false;
@@ -58,11 +60,16 @@ public class ConnectorBasicsPlugin : BaseUnityPlugin
                 if (thinkPlugins.Instance.GetType().GetFields(BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic).ToList().Exists(x => x.FieldType.Equals(typeof(MassObjectHolder))))
                 {
                     ModdedSaveGame.AddSaveHandler(thinkPlugins);
-                    UnityEngine.Debug.Log($"Handling save for {thinkPlugins.Metadata.GUID}!");
+                    Log.LogInfo($"Handling save for {thinkPlugins.Metadata.GUID}!");
                     HashSet<LevelObject> weAlreadyGotToThat = new HashSet<LevelObject>();
                     foreach (var scene in thinkPlugins.Instance.GetType().GetFields(BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic).ToList().FindAll(x => x.FieldType.Equals(typeof(SceneObject))))
                     {
                         var gottenscene = (SceneObject)scene.GetValue(thinkPlugins.Instance);
+                        if (gottenscene == null)
+                        {
+                            Log.LogWarning($"SceneObject field {scene.Name} from {thinkPlugins.Metadata.GUID} is null! Skipping!");
+                            continue;
+                        }
                         if (SceneObjectMetaStorage.Instance.Get(gottenscene) != null) continue;
                         /*foreach (var levelObject in gottenscene.GetCustomLevelObjects()) // This is better... I think?
                         {
@@ -77,7 +84,7 @@ public class ConnectorBasicsPlugin : BaseUnityPlugin
                         if (!Attribute.IsDefined(scene, typeof(HideInInspector)))
                         {
                             GeneratorManagement.EnqueueGeneratorChanges(gottenscene);
-                            UnityEngine.Debug.Log($"Enqueuing generation changes for {scene.Name} from {thinkPlugins.Metadata.GUID}!");
+                            Log.LogInfo($"Enqueuing generation changes for {scene.Name} from {thinkPlugins.Metadata.GUID}!");
                         }
                     }
                 }

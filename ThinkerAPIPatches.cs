@@ -66,9 +66,7 @@ internal class ThinkerAPIPatches
             string[] files = Directory.GetFiles(path);
             
             if (files.Length == 0)
-            {
-                Debug.LogError("you got no captions");
-            }
+                ConnectorBasicsPlugin.Log.LogInfo($"Localization path {Path.GetDirectoryName(path)} has no captions!");
             else
             {
                 AssetLoader.LocalizationFromFunction((lang) =>
