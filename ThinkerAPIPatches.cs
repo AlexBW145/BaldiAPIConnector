@@ -1,17 +1,18 @@
-﻿using BepInEx.Bootstrap;
+﻿using BepInEx;
+using BepInEx.Bootstrap;
 using HarmonyLib;
 using MTM101BaldAPI;
+using MTM101BaldAPI.AssetTools;
+using MTM101BaldAPI.ObjectCreation;
 using MTM101BaldAPI.Registers;
-using ThinkerAPI;
 using System;
 using System.Collections.Generic;
-using UnityEngine;
 using System.IO;
-using MTM101BaldAPI.AssetTools;
-using System.Reflection.Emit;
+using System.Linq;
 using System.Reflection;
-using MTM101BaldAPI.ObjectCreation;
-using BepInEx;
+using System.Reflection.Emit;
+using ThinkerAPI;
+using UnityEngine;
 
 namespace APIConnector;
 
@@ -166,6 +167,13 @@ internal class ThinkerAPIPatches
             .SetSprites(bit.smallSprite, bit.largeSprite)
             .SetShopPrice(bit.shopPrice)
             .SetGeneratorCost(bit.genCost);
+        ItemFlags flags = ItemFlags.None;
+        var fields = bit.itemType.GetFields(BindingFlags.Default | BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).ToList();
+        var methods = bit.itemType.GetMethods(BindingFlags.Default | BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).ToList();
+        if (bit.itemType == typeof(Item) || !methods.Exists(x => x.Name == "Use"))
+            flags |= ItemFlags.NoUses;
+        if (fields.Exists(x => x.FieldType.Equals(typeof(Entity))))
+            flags |= ItemFlags.CreatesEntity;
         if (bit.pickup != null)
             builder.SetPickupSound(bit.pickup);
         if (bit.instantuse)
