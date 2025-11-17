@@ -3,6 +3,7 @@ using BepInEx.Bootstrap;
 using BepInEx.Logging;
 using HarmonyLib;
 using MTM101BaldAPI;
+using MTM101BaldAPI.ObjectCreation;
 using MTM101BaldAPI.Registers;
 using MTM101BaldAPI.SaveSystem;
 using System;
@@ -12,12 +13,13 @@ using System.Linq;
 using System.Reflection;
 using ThinkerAPI;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace APIConnector;
 
 [BepInPlugin(PLUGIN_GUID, PLUGIN_NAME, PLUGIN_VERSION)]
 [BepInDependency("mtm101.rulerp.bbplus.baldidevapi", "10.0.0.0")]
-[BepInDependency("thinkerAPI", "1.0.0.0")]
+[BepInDependency("thinkerAPI", BepInDependency.DependencyFlags.HardDependency)]
 [BepInDependency("OurWindowsFragiled", BepInDependency.DependencyFlags.SoftDependency)]
 [BepInProcess("BALDI.exe")]
 public class ConnectorBasicsPlugin : BaseUnityPlugin
@@ -27,11 +29,17 @@ public class ConnectorBasicsPlugin : BaseUnityPlugin
     private const string PLUGIN_VERSION = "0.2.1.2";
     internal static ManualLogSource Log = new ManualLogSource("BaldiAPIConnector");
 
-    internal static bool Connected = false;
-    internal static bool Doings = false;
+    internal static bool Connected = false, Doings = false;
+    internal static int prevStoppers = 0;
+    internal static readonly Dictionary<RandomEvent, Tuple<RandomEvent, string, Type, SoundObject, SoundObject>> randomEventsToQueue = new();
     private void Awake()
     {
         Harmony harmony = new Harmony(PLUGIN_GUID);
+        thinkerAPI.Instance.StopAllCoroutines();
+        thinkerAPI.WarningScreenLoaded = false;
+        thinkerAPI.givemeaheadstart = false;
+        prevStoppers = thinkerAPI.warningScreenBlockers;
+        thinkerAPI.warningScreenBlockers = 0;
         Assembly[] assemblies = [Assembly.GetAssembly(typeof(Baldi)), ..AccessTools.AllTypes().Where(x => x.IsSubclassOf(typeof(BaseUnityPlugin))).Select(x => x.Assembly)]; // So I did this instead??
         foreach (var _enum in AccessTools.AllTypes().Where(x => x.IsEnum && assemblies.Contains(x.Assembly) && x.IsPublic)) // Found out how, but couldn't figure out HOW to exclude system & unity package enums.
             harmony.Patch(AccessTools.Method(typeof(ENanmEXTENDED), nameof(ENanmEXTENDED.GetAnEnumThatDoesntExist), [typeof(string)], [_enum]), transpiler: new HarmonyMethod(AccessTools.Method(typeof(ThinkerAPIPatches), "EnumFromMissedTheTexture")));
@@ -43,16 +51,226 @@ public class ConnectorBasicsPlugin : BaseUnityPlugin
 
         IEnumerator Postdoings()
         {
-            yield return 2;
+            yield return 6;
             yield return "Connecting APIs...";
-            var nameentry = GameObject.Find("NameEntry");
-            nameentry.name = "IAMDOINGSTUF";
             Doings = true;
-            var menu = new GameObject("MenuThatKills", typeof(MainMenu));
-            menu.SetActive(true);
+            #region CONNECTION PROCESS
+            thinkerAPI.WarningScreenLoaded = true;
+            thinkerAPI.assets.AddAssetFolder("WindowPeeBug");
+            thinkerAPI.openschoolBuilder = new GameObject("OpenSchoolBuilder").AddComponent<Structure_OpenSchoolThing>();
+            thinkerAPI.openschoolBuilder.gameObject.ConvertToPrefab(true);
+            thinkerAPI.noexitBuilder = new GameObject("NoExitBuilder").AddComponent<Structure_PushPlayerSomewhereRandom>();
+            thinkerAPI.noexitBuilder.gameObject.ConvertToPrefab(true);
+            thinkerAPI.infBuilder = new GameObject("InfBuilder").AddComponent<Structure_InfStamina>();
+            thinkerAPI.infBuilder.gameObject.ConvertToPrefab(true);
+
+            yield return new WaitForSeconds(1f);
+            yield return new WaitUntil(() => prevStoppers <= 0);
+            Log.LogInfo("We got past through the stoppers.");
+            thinkerAPI.WarningScreenPassed = true;
+
+            int
+                prevNPCs = thinkerAPI.modNPCs.Count,
+                prevItems = thinkerAPI.modItems.Count,
+                prevEvents = thinkerAPI.modEvents.Count,
+                prevStructures = thinkerAPI.modObjects.Count,
+                prevRooms = thinkerAPI.modRooms.Count,
+                prevPosters = thinkerAPI.modPosters.Count;
+            bool modified = true;
+            yield return new WaitUntil(() =>
+            {
+                modified = false;
+                if (prevNPCs != thinkerAPI.modNPCs.Count
+                    || prevItems != thinkerAPI.modItems.Count
+                    || prevEvents != thinkerAPI.modEvents.Count
+                    || prevStructures != thinkerAPI.modObjects.Count
+                    || prevRooms != thinkerAPI.modRooms.Count
+                    || prevPosters != thinkerAPI.modPosters.Count)
+                    modified = true;
+                prevNPCs = thinkerAPI.modNPCs.Count;
+                prevItems = thinkerAPI.modItems.Count;
+                prevEvents = thinkerAPI.modEvents.Count;
+                prevStructures = thinkerAPI.modObjects.Count;
+                prevRooms = thinkerAPI.modRooms.Count;
+                prevPosters = thinkerAPI.modPosters.Count;
+                return modified;
+            });
+            thinkerAPI.FileListPassed = true;
+            Log.LogInfo("We got past through checks.");
+
+            foreach (BasicNPCTemplate _npc in thinkerAPI.modNPCs)
+            {
+                NPC npc = thinkerAPI.CreateNPC(_npc);
+                npc.name = _npc.name;
+                _npc.moh.AddAsset(npc, _npc.enumname + "NPCObject");
+                WindowPeeBugManager.npcs.Add(npc);
+            }
+
+            foreach (BasicItemTemplate _itemobject in thinkerAPI.modItems)
+            {
+                ItemObject itemobject = thinkerAPI.CreateItem(_itemobject);
+                itemobject.name = _itemobject.enumName;
+                _itemobject.moh.AddAsset(itemobject, _itemobject.enumName + "ItemObject");
+                Singleton<PlayerFileManager>.Instance.itemObjects.Add(itemobject);
+                WindowPeeBugManager.items.Add(itemobject);
+            }
+
+            FieldInfo 
+                _eventscript = AccessTools.DeclaredField(typeof(BasicEventTemplate), "eventscript"),
+                modItsIn = AccessTools.DeclaredField(typeof(MassObjectHolder), "modImIn");
+            foreach (BasicEventTemplate _randomevent in thinkerAPI.modEvents) // This is not even worthy to create a random event when looking at how random events are created with ThinkerAPI.
+            {
+                var dummyToGrab = randomEventsToQueue[_randomevent.eventscript];
+                randomEventsToQueue.Remove(dummyToGrab.Item1);
+                var randomEvent = dummyToGrab.Item1;
+                var type = typeof(RandomEventBuilder<>).MakeGenericType(dummyToGrab.Item3);
+                var builder = type.GetConstructor([typeof(PluginInfo)]).Invoke([Chainloader.PluginInfos[(string)modItsIn.GetValue(_randomevent.moh)]]);
+                type.GetMethod("SetName", [typeof(string)]).Invoke(builder, [dummyToGrab.Item2]);
+                type.GetMethod("SetEnum", [typeof(string)]).Invoke(builder, [dummyToGrab.Item2.Replace(" ", "").Replace("_", "")]);
+                type.GetMethod("SetSound", [typeof(SoundObject)]).Invoke(builder, [dummyToGrab.Item4]);
+                type.GetMethod("SetMinMaxTime", [typeof(float), typeof(float)]).Invoke(builder, [_randomevent.min, _randomevent.max]);
+                if (dummyToGrab.Item5 != null)
+                    type.GetMethod("SetJingle", [typeof(SoundObject)]).Invoke(builder, [dummyToGrab.Item5]);
+                if (randomEvent.PotentialRoomAssets.Length != 0)
+                    type.GetMethod("AddRoomAssets").Invoke(builder, [randomEvent.PotentialRoomAssets]);
+                _eventscript.SetValue(_randomevent, (RandomEvent)type.GetMethod("Build").Invoke(builder, []));
+                GameObject.DestroyImmediate(randomEvent);
+            }
+
+            // Note to most coders: ThinkerAPI does not use dictionary stuff for its own level generation management.
+            Dictionary<Sprite, PosterObject> postersCreated = new();
+            GeneratorManagement.Register(this, GenerationModType.Addend, (title, num, sceneObject) =>
+            {
+                var meta = sceneObject.GetMeta();
+                if (meta == null || (!meta.tags.Contains("main") && !meta.tags.Contains("endless"))) return;
+                foreach (BasicNPCTemplate modNPC in thinkerAPI.modNPCs)
+                {
+                    NPC actualNPC = (NPC)modNPC.moh.GetAsset(modNPC.enumname + "NPCObject");
+                    for (int i = 0; i < modNPC.floorNames.Count; i++)
+                    {
+                        if (modNPC.floorNames[i] == title)
+                        {
+                            sceneObject.potentialNPCs.Add(new WeightedNPC()
+                            {
+                                selection = actualNPC,
+                                weight = modNPC.floorWeights[i]
+                            });
+                        }
+                    }
+                }
+                foreach (BasicItemTemplate modItem in thinkerAPI.modItems)
+                {
+                    if (modItem.isShop)
+                    {
+                        ItemObject actualItemObject = (ItemObject)modItem.moh.GetAsset(modItem.enumName + "ItemObject");
+                        sceneObject.shopItems = sceneObject.shopItems.AddToArray(new WeightedItemObject()
+                        {
+                            selection = actualItemObject,
+                            weight = modItem.shopWeight
+                        });
+                    }
+                }
+                foreach (var levelObject in sceneObject.GetCustomLevelObjects())
+                {
+                    if (levelObject.IsModifiedByMod(Info)) continue;
+                    foreach (BasicItemTemplate modItem in thinkerAPI.modItems)
+                    {
+                        ItemObject actualItemObject = (ItemObject)modItem.moh.GetAsset(modItem.enumName + "ItemObject");
+                        for (int i = 0; i < modItem.floorNames.Count; i++)
+                        {
+                            if (modItem.floorNames[i] == title)
+                            {
+                                levelObject.potentialItems = levelObject.potentialItems.AddToArray(new WeightedItemObject()
+                                {
+                                    selection = actualItemObject,
+                                    weight = modItem.weights[i]
+                                });
+                            }
+                        }
+                    }
+                    foreach (BasicBuilderTemplate modObject in thinkerAPI.modObjects)
+                    {
+                        for (int i = 0; i < modObject.floorNames.Count; i++)
+                        {
+                            if (modObject.floorNames[i] == title)
+                            {
+                                levelObject.potentialStructures = levelObject.potentialStructures.AddToArray(new WeightedStructureWithParameters()
+                                {
+                                    selection = modObject.builder,
+                                    weight = modObject.floorWeights[i]
+                                });
+                            }
+                        }
+                    }
+                    foreach (BasicRoomTemplate modRoom in thinkerAPI.modRooms)
+                    {
+                        for (int i = 0; i < modRoom.floorNames.Count; i++)
+                        {
+                            if (modRoom.floorNames[i] == title)
+                            {
+                                levelObject.roomGroup = levelObject.roomGroup.AddToArray(new RoomGroup()
+                                {
+                                    ceilingTexture = modRoom.ceiling,
+                                    wallTexture = modRoom.wall,
+                                    floorTexture = modRoom.floor,
+                                    light = levelObject.hallLights, // Does not allow custom lights?? What the fuck?!
+                                    minRooms = modRoom.min,
+                                    maxRooms = modRoom.max,
+                                    potentialRooms = modRoom.roomDesigns.ToArray(),
+                                    stickToHallChance = modRoom.hallstickchance,
+                                    name = modRoom.roomgroupname
+                                });
+                            }
+                        }
+                    }
+                    foreach (BasicEventTemplate modEvent in thinkerAPI.modEvents)
+                    {
+                        for (int i = 0; i < modEvent.floorNames.Count; i++)
+                        {
+                            if (modEvent.floorNames[i] == title)
+                            {
+                                levelObject.randomEvents.Add(new WeightedRandomEvent()
+                                {
+                                    selection = modEvent.eventscript,
+                                    weight = modEvent.floorWeights[i]
+                                });
+                            }
+                        }
+                    }
+                    foreach (BasicPosterTemplate modPoster in thinkerAPI.modPosters)
+                    {
+                        PosterObject s;
+                        if (postersCreated.ContainsKey(modPoster.poster[0])) // Because the delegate creates more posters than once...
+                            s = postersCreated[modPoster.poster[0]];
+                        else // And also it blindly creates the poster object with a sprite instead of a texture2D. (And also no localization inclusion...)
+                        {
+                            s = ObjectCreators.CreatePosterObject(modPoster.poster[0].texture, []);
+                            postersCreated.Add(modPoster.poster[0], s);
+                        }
+                        for (int i = 0; i < modPoster.floorNames.Count; i++)
+                        {
+                            if (modPoster.floorNames[i] == title)
+                            {
+                                levelObject.posters = levelObject.posters.AddToArray(new WeightedPosterObject()
+                                {
+                                    selection = s,
+                                    weight = modPoster.floorWeights[i]
+                                });
+                            }
+                        }
+                    }
+                    levelObject.MarkAsModifiedByMod(Info);
+                }
+            });
+            if (thinkerAPI.captionpaths.Count > 0)
+            {
+                thinkerAPI.LoadSavedCaptions();
+                thinkerAPI.captionpaths.Clear();
+            }
+
+            Connected = true;
+            #endregion
             yield return new WaitUntil(() => Connected);
-            DestroyImmediate(menu);
-            nameentry.name = "NameEntry";
             yield return "Adding save handlers and scene generator enqueues...";
             foreach (var thinkPlugins in Chainloader.PluginInfos.Values)
             {
@@ -97,12 +315,17 @@ public class ConnectorBasicsPlugin : BaseUnityPlugin
         }
         IEnumerator Savefixes()
         {
-            yield return 1;
+            yield return 1 + (Chainloader.PluginInfos.ContainsKey("alexbw145.baldiplus.pinedebug") ? 1 : 0);
             yield return "Forcing MTM101API to regenerate tags";
             ModdedFileManager.Instance.RegenerateTags();
+            if (Chainloader.PluginInfos.ContainsKey("alexbw145.baldiplus.pinedebug"))
+            {
+                yield return "Initializing WindowPeeDebug...";
+                WindowPeeBugManager.InitializeWPD(); // Due to PineDebug...
+            }
         }
+        LoadingEvents.RegisterOnAssetsLoaded(Info, FloorStuff.LoadBaseGameFloors, LoadingEventOrder.Start); // Due to Fragile Windows...
         LoadingEvents.RegisterOnAssetsLoaded(Info, Postdoings(), LoadingEventOrder.Pre);
-        LoadingEvents.RegisterOnAssetsLoaded(Info, WindowPeeBugManager.InitializeWPD, LoadingEventOrder.Post);
         LoadingEvents.RegisterOnAssetsLoaded(Info, Savefixes(), LoadingEventOrder.Final);
     }
 }

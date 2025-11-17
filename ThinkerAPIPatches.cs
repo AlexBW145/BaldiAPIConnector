@@ -1,45 +1,68 @@
-﻿using BepInEx.Bootstrap;
+﻿using BepInEx;
+using BepInEx.Bootstrap;
 using HarmonyLib;
 using MTM101BaldAPI;
-using MTM101BaldAPI.Registers;
-using ThinkerAPI;
-using System;
-using System.Collections.Generic;
-using UnityEngine;
-using System.IO;
 using MTM101BaldAPI.AssetTools;
-using System.Reflection.Emit;
-using System.Reflection;
 using MTM101BaldAPI.ObjectCreation;
-using BepInEx;
+using MTM101BaldAPI.Registers;
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Reflection;
+using System.Reflection.Emit;
+using ThinkerAPI;
+using UnityEngine;
+using UnityEngine.UIElements.UIR;
 
 namespace APIConnector;
 
 [HarmonyPatch]
 internal class ThinkerAPIPatches
 {
+    [HarmonyPatch(typeof(MassObjectHolder), nameof(MassObjectHolder.AddAssetFolder)), HarmonyPrefix]
+    static bool RedirectCoroutine(string folderpath, MassObjectHolder __instance)
+    {
+        if (__instance.modImIn == "NULLMODEXCEPTIONABCDEFGHIJKLMNOP") return false;
+        BaseUnityPlugin instance = Chainloader.PluginInfos["alexbw145.bbplus.apiconnector"].Instance;
+        IEnumerator AddAssetolder(string folderpath)
+        {
+            __instance.loaders++;
+            // And yet, no return or throw statement for the error debug log...
+
+            string[] asset = Directory.GetFiles(Path.Combine(thinkerAPI.moddedpath, __instance.modImIn, folderpath));
+            string[] array = asset;
+            foreach (string s in array)
+            {
+                var actualPath = Path.Combine(__instance.modImIn, folderpath, s);
+                string extension = Path.GetExtension(actualPath);
+                if (extension.ToLower() == ".png")
+                    yield return instance.StartCoroutine(__instance.AddASprite(actualPath));
+                else if (extension.ToLower() == ".ogg" || extension.ToLower() == ".mp3" || extension.ToLower() == ".wav")
+                    yield return instance.StartCoroutine(__instance.AddAClip(actualPath));
+            }
+
+            __instance.loaders--;
+        }
+        instance.StartCoroutine(AddAssetolder(folderpath));
+        return false;
+    }
+    [HarmonyPatch(typeof(thinkerAPI), nameof(thinkerAPI.LetWarningScreenContinue)), HarmonyPrefix]
+    static bool LetConnectorContinue()
+    {
+        ConnectorBasicsPlugin.prevStoppers--;
+        return false;
+    }
+    [HarmonyPatch(typeof(thinkerAPI), nameof(thinkerAPI.StopWarningScreenFromContinuing)), HarmonyPrefix]
+    static bool StopConnectorFromInstantlyLoading()
+    {
+        ConnectorBasicsPlugin.prevStoppers++;
+        return false;
+    }
 
     [HarmonyPatch(typeof(WindowPeeBugManager), nameof(WindowPeeBugManager.InitializeWPD)), HarmonyPrefix]
-    static bool DoExtraStuffPlusPinedebugSupportInit() // Considering that his code is that messy...
-    {
-        if (!ConnectorBasicsPlugin.Connected)
-        {
-            foreach (var eventt in thinkerAPI.modEvents) // There isn't anything else to do with events...
-            {
-                RandomEventFlags flags = RandomEventFlags.None;
-                if (eventt.eventscript.PotentialRoomAssets.Length > 0)
-                    flags |= RandomEventFlags.RoomSpecific | RandomEventFlags.AffectsGenerator;
-                if (eventt.floorNames.Count <= 0)
-                    flags |= RandomEventFlags.Special;
-                //eventt.eventscript.ReflectionSetVariable("eventType", EnumExtensions.ExtendEnum<RandomEventType>(eventt.eventname.Replace(" ", "")));
-                RandomEventMetaStorage.Instance.Add(new RandomEventMetadata(Chainloader.PluginInfos[(string)modItsIn.GetValue(eventt.moh)], eventt.eventscript, flags));
-            }
-            return false;
-        }
-        return true;
-        /*(if (Chainloader.PluginInfos.ContainsKey("alexbw145.baldiplus.pinedebug"))
-            PineDebugSupport.Initalize();*/
-    }
+    static bool DoExtraStuffPlusPinedebugSupportInit() => ConnectorBasicsPlugin.Connected; // Considering that his code is that messy...
 
     [HarmonyPatch]
     static IEnumerable<CodeInstruction> EnumFromMissedTheTexture(IEnumerable<CodeInstruction> instructions)
@@ -96,31 +119,25 @@ internal class ThinkerAPIPatches
         return false;
     }
 
-
-    [HarmonyPatch(typeof(thinkerAPI), "WaitForWarnings", MethodType.Enumerator), HarmonyTranspiler]
-    static IEnumerable<CodeInstruction> ConnectorWaitUntil(IEnumerable<CodeInstruction> instructions) => new CodeMatcher(instructions)
-        .End()
-        .Insert(Transpilers.EmitDelegate<Action>(() => ConnectorBasicsPlugin.Connected = true))
-        /*.Start()
-        .MatchForward(false,
-        new CodeMatch(OpCodes.Call, AccessTools.Method(typeof(UnityEngine.Object), nameof(UnityEngine.Object.FindObjectOfType), [], [typeof(MainMenu)])),
-        new CodeMatch(OpCodes.Ldnull),
-        new CodeMatch(x => x.opcode == OpCodes.Call && ((MethodBase)x.operand).Name == "op_Inequality"),
-        new CodeMatch(ci => ci.IsStloc())
-        )
-        .ThrowIfInvalid("UHHH")
-        .Set(OpCodes.Call, AccessTools.Method(typeof(ThinkerAPIPatches), nameof(UhhhUh)))*/
-        .InstructionEnumeration();
-#if false
-    static MainMenu UhhhUh()
+    [HarmonyPatch(typeof(thinkerAPI), nameof(thinkerAPI.MakePrefab)), HarmonyPrefix]
+    static bool CreatingPrefabsTheEasyWay(GameObject abab, bool active)
     {
-        if (!ConnectorBasicsPlugin.Doings)
-            return null;
-        return UnityEngine.Object.FindObjectOfType<MainMenu>(true);
+        abab.ConvertToPrefab(active);
+        return false;
     }
-#endif
 
     private static FieldInfo modItsIn = AccessTools.DeclaredField(typeof(MassObjectHolder), "modImIn");
+    [HarmonyPatch(typeof(thinkerAPI), nameof(thinkerAPI.CreateEventObject)), HarmonyPrefix]
+    static bool CreateRandomEventIntoMeta(string nm, Type t, SoundObject voiceline, SoundObject jingleOverride, ref GameObject __result)
+    {
+        var dummyPrefab = new GameObject("DummyRandomEvent_" + nm);
+        dummyPrefab.ConvertToPrefab(true);
+        var dummyEvent = dummyPrefab.AddComponent(t) as RandomEvent;
+        ConnectorBasicsPlugin.randomEventsToQueue.Add(dummyEvent, new(dummyEvent, nm, t, voiceline, jingleOverride));
+        __result = dummyPrefab;
+        return false;
+    }
+
     [HarmonyPatch(typeof(thinkerAPI), nameof(thinkerAPI.CreateNPC)), HarmonyPrefix]
     static bool AddToMetaDataNPC(ref BasicNPCTemplate bit, ref NPC __result)
     {
@@ -170,6 +187,13 @@ internal class ThinkerAPIPatches
             builder.SetPickupSound(bit.pickup);
         if (bit.instantuse)
             builder.SetAsInstantUse();
+        ItemFlags flags = ItemFlags.None;
+        var fields = bit.itemType.GetFields(BindingFlags.Default | BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).ToList();
+        var methods = bit.itemType.GetMethods(BindingFlags.Default | BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).ToList();
+        if (bit.itemType == typeof(Item) || !methods.Exists(x => x.Name == "Use"))
+            flags |= ItemFlags.NoUses;
+        if (fields.Exists(x => x.FieldType.Equals(typeof(Entity))))
+            flags |= ItemFlags.CreatesEntity;
         type.GetMethod("SetItemComponent", []).MakeGenericMethod(bit.itemType).Invoke(builder, []);
         // ThinkerAPI is missing `overrideDisabled` which Eco Friendly stupidly patches something so that it can be used in Pitstop FOR NO REASON.
         __result = builder.Build();
