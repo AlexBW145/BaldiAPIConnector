@@ -24,7 +24,7 @@ public class ConnectorBasicsPlugin : BaseUnityPlugin
 {
     private const string PLUGIN_GUID = "alexbw145.bbplus.apiconnector";
     private const string PLUGIN_NAME = "ThinkerAPI + MTM101API Connector";
-    private const string PLUGIN_VERSION = "0.2.1.2";
+    private const string PLUGIN_VERSION = "0.2.1.3";
     internal static ManualLogSource Log = new ManualLogSource("BaldiAPIConnector");
 
     internal static bool Connected = false;
@@ -100,9 +100,10 @@ public class ConnectorBasicsPlugin : BaseUnityPlugin
             yield return 1;
             yield return "Forcing MTM101API to regenerate tags";
             ModdedFileManager.Instance.RegenerateTags();
+            if (Chainloader.PluginInfos.ContainsKey("alexbw145.baldiplus.pinedebug") || !MTM101BaldiDevAPI.SaveGamesEnabled)
+                WindowPeeBugManager.InitializeWPD(); // Due to PineDebug...
         }
         LoadingEvents.RegisterOnAssetsLoaded(Info, Postdoings(), LoadingEventOrder.Pre);
-        LoadingEvents.RegisterOnAssetsLoaded(Info, WindowPeeBugManager.InitializeWPD, LoadingEventOrder.Post);
         LoadingEvents.RegisterOnAssetsLoaded(Info, Savefixes(), LoadingEventOrder.Final);
     }
 }

@@ -27,9 +27,12 @@ internal class ThinkerAPIPatches
         {
             foreach (var eventt in thinkerAPI.modEvents) // There isn't anything else to do with events...
             {
+                var methods = eventt.eventscript.GetType().GetMethods(BindingFlags.Default | BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).ToList();
                 RandomEventFlags flags = RandomEventFlags.None;
                 if (eventt.eventscript.PotentialRoomAssets.Length > 0)
-                    flags |= RandomEventFlags.RoomSpecific | RandomEventFlags.AffectsGenerator;
+                    flags |= RandomEventFlags.RoomSpecific;
+                if (methods.Exists(x => x.Name == "AfterUpdateSetup") || eventt.eventscript.PotentialRoomAssets.Length > 0)
+                    flags |= RandomEventFlags.AffectsGenerator;
                 if (eventt.floorNames.Count <= 0)
                     flags |= RandomEventFlags.Special;
                 //eventt.eventscript.ReflectionSetVariable("eventType", EnumExtensions.ExtendEnum<RandomEventType>(eventt.eventname.Replace(" ", "")));
