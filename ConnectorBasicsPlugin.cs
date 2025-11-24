@@ -12,6 +12,7 @@ using System.Linq;
 using System.Reflection;
 using ThinkerAPI;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace APIConnector;
 
@@ -27,14 +28,19 @@ public class ConnectorBasicsPlugin : BaseUnityPlugin
     private const string PLUGIN_VERSION = "0.2.1.3";
     internal static ManualLogSource Log = new ManualLogSource("BaldiAPIConnector");
 
-    internal static bool Connected = false;
-    internal static bool Doings = false;
+    internal static bool Connected = false, Doings = false, CaptionsLoaded = false;
     private void Awake()
     {
         Harmony harmony = new Harmony(PLUGIN_GUID);
         Assembly[] assemblies = [Assembly.GetAssembly(typeof(Baldi)), ..AccessTools.AllTypes().Where(x => x.IsSubclassOf(typeof(BaseUnityPlugin))).Select(x => x.Assembly)]; // So I did this instead??
-        foreach (var _enum in AccessTools.AllTypes().Where(x => x.IsEnum && assemblies.Contains(x.Assembly) && x.IsPublic)) // Found out how, but couldn't figure out HOW to exclude system & unity package enums.
-            harmony.Patch(AccessTools.Method(typeof(ENanmEXTENDED), nameof(ENanmEXTENDED.GetAnEnumThatDoesntExist), [typeof(string)], [_enum]), transpiler: new HarmonyMethod(AccessTools.Method(typeof(ThinkerAPIPatches), "EnumFromMissedTheTexture")));
+        SceneManager.sceneLoaded += (scene, mode) =>
+        {
+            if (scene.buildIndex == 0 && !Doings)
+            {
+                foreach (var _enum in AccessTools.AllTypes().Where(x => x.IsEnum && assemblies.Contains(x.Assembly) && x.IsPublic)) // Found out how, but couldn't figure out HOW to exclude system & unity package enums.
+                    harmony.Patch(AccessTools.Method(typeof(ENanmEXTENDED), nameof(ENanmEXTENDED.GetAnEnumThatDoesntExist), [typeof(string)], [_enum]), transpiler: new HarmonyMethod(AccessTools.Method(typeof(ThinkerAPIPatches), "EnumFromMissedTheTexture")));
+            }
+        };
         harmony.PatchAllConditionals();
         // The generics are hardmode...
         if (Chainloader.PluginInfos.ContainsKey("OurWindowsFragiled"))
@@ -53,6 +59,8 @@ public class ConnectorBasicsPlugin : BaseUnityPlugin
             yield return new WaitUntil(() => Connected);
             DestroyImmediate(menu);
             nameentry.name = "NameEntry";
+            AccessTools.Method(typeof(thinkerAPI), "LoadSavedCaptions").Invoke(null, []);
+            CaptionsLoaded = true;
             yield return "Adding save handlers and scene generator enqueues...";
             foreach (var thinkPlugins in Chainloader.PluginInfos.Values)
             {
