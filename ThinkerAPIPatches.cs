@@ -70,7 +70,7 @@ internal class ThinkerAPIPatches
             {
                 string fileNameWithoutExtension = Path.GetFileNameWithoutExtension(text);
                 // This is the worst way of sound object creation, where are the subtitle keys?
-                __instance.AddAsset(ObjectCreators.CreateSoundObject((AudioClip)__instance.GetAsset(fileNameWithoutExtension, typeof(AudioClip)), fileNameWithoutExtension, sos.typ, sos.col, subtitle ? 0f : -1f), fileNameWithoutExtension + "SO");
+                __instance.AddAsset(ObjectCreators.CreateSoundObject((AudioClip)__instance.GetAsset(fileNameWithoutExtension, typeof(AudioClip)), fileNameWithoutExtension, sos.typ, sos.col, subtitle ? -1f : 0f), fileNameWithoutExtension + "SO");
             }
         }
 
