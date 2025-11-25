@@ -31,8 +31,7 @@ internal class ThinkerAPIPatches
             // And yet, no return or throw statement for the error debug log...
 
             string[] asset = Directory.GetFiles(Path.Combine(thinkerAPI.moddedpath, __instance.modImIn, folderpath));
-            string[] array = asset;
-            foreach (string s in array)
+            foreach (string s in asset)
             {
                 var actualPath = Path.Combine(__instance.modImIn, folderpath, s);
                 string extension = Path.GetExtension(actualPath);
@@ -60,37 +59,16 @@ internal class ThinkerAPIPatches
         return false;
     }
 
+    [HarmonyPatch(typeof(thinkerAPI), nameof(thinkerAPI.WaitForWarnings), MethodType.Enumerator), HarmonyPostfix] // Gets called twice.
+    static void GrabForStopping(IEnumerator __instance)
+    {
+        if (ConnectorBasicsPlugin.thinkerAPICoroutine == null)
+            ConnectorBasicsPlugin.thinkerAPICoroutine = __instance;
+    }
+
     [HarmonyPatch(typeof(WindowPeeBugManager), nameof(WindowPeeBugManager.InitializeWPD)), HarmonyPrefix]
     static bool DoExtraStuffPlusPinedebugSupportInit() => ConnectorBasicsPlugin.Connected; // Considering that his code is that messy...
 
-    [HarmonyPatch(typeof(MassObjectHolder), nameof(MassObjectHolder.AddAssetFolder)), HarmonyPrefix]
-    static bool RedirectCoroutine(string folderpath, MassObjectHolder __instance)
-    {
-        var modImIn = (string)modItsIn.GetValue(__instance);
-        if (modImIn == "NULLMODEXCEPTIONABCDEFGHIJKLMNOP") return false;
-        IEnumerator AddAssetolder(string folderpath)
-        {
-            var loaders = (int)_loaders.GetValue(__instance);
-            _loaders.SetValue(__instance, loaders++);
-
-            string[] asset = Directory.GetFiles(Path.Combine(thinkerAPI.moddedpath, modImIn, folderpath));
-            string[] array = asset;
-            foreach (string s in array)
-            {
-                var actualPath = Path.Combine(modImIn, folderpath, s);
-                string extension = Path.GetExtension(actualPath); // Do better.
-                if (extension.ToLower() == ".png")
-                    yield return thinkerAPI.Instance.StartCoroutine(__instance.AddASprite(actualPath));
-                else if (extension.ToLower() == ".ogg" || extension.ToLower() == ".mp3" || extension.ToLower() == ".wav")
-                    yield return thinkerAPI.Instance.StartCoroutine(__instance.AddAClip(actualPath));
-            }
-
-            loaders = (int)_loaders.GetValue(__instance);
-            _loaders.SetValue(__instance, loaders--);
-        }
-        thinkerAPI.Instance.StartCoroutine(AddAssetolder(folderpath));
-        return false;
-    }
 
     [HarmonyPatch]
     static IEnumerable<CodeInstruction> EnumFromMissedTheTexture(IEnumerable<CodeInstruction> instructions)
@@ -135,7 +113,8 @@ internal class ThinkerAPIPatches
         return false;
     }
 
-    private static FieldInfo modItsIn = AccessTools.DeclaredField(typeof(MassObjectHolder), "modImIn");
+    private static FieldInfo modItsIn = AccessTools.DeclaredField(typeof(MassObjectHolder), "modImIn"),
+        _loaders = AccessTools.DeclaredField(typeof(MassObjectHolder), "loaders");
     [HarmonyPatch(typeof(thinkerAPI), nameof(thinkerAPI.CreateEventObject)), HarmonyPrefix]
     static bool CreateRandomEventIntoMeta(string nm, Type t, SoundObject voiceline, SoundObject jingleOverride, ref GameObject __result)
     {
@@ -203,13 +182,6 @@ internal class ThinkerAPIPatches
             builder.SetPickupSound(bit.pickup);
         if (bit.instantuse)
             builder.SetAsInstantUse();
-        ItemFlags flags = ItemFlags.None;
-        var fields = bit.itemType.GetFields(BindingFlags.Default | BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).ToList();
-        var methods = bit.itemType.GetMethods(BindingFlags.Default | BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).ToList();
-        if (bit.itemType == typeof(Item) || !methods.Exists(x => x.Name == "Use"))
-            flags |= ItemFlags.NoUses;
-        if (fields.Exists(x => x.FieldType.Equals(typeof(Entity))))
-            flags |= ItemFlags.CreatesEntity;
         type.GetMethod("SetItemComponent", []).MakeGenericMethod(bit.itemType).Invoke(builder, []);
         // ThinkerAPI is missing `overrideDisabled` which Eco Friendly stupidly patches something so that it can be used in Pitstop FOR NO REASON.
         __result = builder.Build();

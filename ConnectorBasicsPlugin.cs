@@ -32,6 +32,7 @@ public class ConnectorBasicsPlugin : BaseUnityPlugin
     internal static bool Connected = false, Doings = false, CaptionsLoaded = false;
     internal static int prevStoppers = 0;
     internal static readonly Dictionary<RandomEvent, Tuple<RandomEvent, string, Type, SoundObject, SoundObject>> randomEventsToQueue = new();
+    internal static IEnumerator thinkerAPICoroutine;
     private void Awake()
     {
         Harmony harmony = new Harmony(PLUGIN_GUID);
@@ -45,6 +46,10 @@ public class ConnectorBasicsPlugin : BaseUnityPlugin
         {
             if (scene.buildIndex == 0 && !Doings)
             {
+                if (thinkerAPICoroutine != null)
+                    thinkerAPI.Instance.StopCoroutine(thinkerAPICoroutine);
+                else
+                    Log.LogWarning("Failed to grab the coroutine, what??");
                 foreach (var _enum in AccessTools.AllTypes().Where(x => x.IsEnum && assemblies.Contains(x.Assembly) && x.IsPublic)) // Found out how, but couldn't figure out HOW to exclude system & unity package enums.
                     harmony.Patch(AccessTools.Method(typeof(ENanmEXTENDED), nameof(ENanmEXTENDED.GetAnEnumThatDoesntExist), [typeof(string)], [_enum]), transpiler: new HarmonyMethod(AccessTools.Method(typeof(ThinkerAPIPatches), "EnumFromMissedTheTexture")));
             }
@@ -277,8 +282,6 @@ public class ConnectorBasicsPlugin : BaseUnityPlugin
             Connected = true;
             #endregion
             yield return new WaitUntil(() => Connected);
-            DestroyImmediate(menu);
-            nameentry.name = "NameEntry";
             AccessTools.Method(typeof(thinkerAPI), "LoadSavedCaptions").Invoke(null, []);
             CaptionsLoaded = true;
             yield return "Adding save handlers and scene generator enqueues...";
