@@ -14,6 +14,7 @@ using System.Reflection;
 using System.Reflection.Emit;
 using ThinkerAPI;
 using UnityEngine;
+using UnityEngine.UIElements.UIR;
 
 namespace APIConnector;
 
@@ -23,8 +24,11 @@ internal class ThinkerAPIPatches
     [HarmonyPatch(typeof(MassObjectHolder), nameof(MassObjectHolder.AddAssetFolder)), HarmonyPrefix]
     static bool RedirectCoroutine(string folderpath, MassObjectHolder __instance)
     {
-        if (__instance.modImIn == "NULLMODEXCEPTIONABCDEFGHIJKLMNOP") return false;
-        BaseUnityPlugin instance = Chainloader.PluginInfos["alexbw145.bbplus.apiconnector"].Instance;
+        if (__instance.modImIn == "NULLMODEXCEPTIONABCDEFGHIJKLMNOP")
+        {
+            ConnectorBasicsPlugin.Log.LogWarning("Couldn't add assets because the guid is not assigned!");
+            return false;
+        }
         IEnumerator AddAssetolder(string folderpath)
         {
             __instance.loaders++;
@@ -36,14 +40,41 @@ internal class ThinkerAPIPatches
                 var actualPath = Path.Combine(__instance.modImIn, folderpath, s);
                 string extension = Path.GetExtension(actualPath);
                 if (extension.ToLower() == ".png")
-                    yield return instance.StartCoroutine(__instance.AddASprite(actualPath));
+                    yield return thinkerAPI.Instance.StartCoroutine(__instance.AddASprite(actualPath));
                 else if (extension.ToLower() == ".ogg" || extension.ToLower() == ".mp3" || extension.ToLower() == ".wav")
-                    yield return instance.StartCoroutine(__instance.AddAClip(actualPath));
+                    yield return thinkerAPI.Instance.StartCoroutine(__instance.AddAClip(actualPath));
             }
 
             __instance.loaders--;
         }
-        instance.StartCoroutine(AddAssetolder(folderpath));
+        thinkerAPI.Instance.StartCoroutine(AddAssetolder(folderpath));
+        return false;
+    }
+    [HarmonyPatch(typeof(MassObjectHolder), nameof(MassObjectHolder.LoadSoundObjectsFromFolder)), HarmonyPrefix]
+    static bool LoadSoundObjectsActually(string folder, BasicSoundobjectTemplate sos, bool subtitle, MassObjectHolder __instance)
+    {
+        if (__instance.modImIn == "NULLMODEXCEPTIONABCDEFGHIJKLMNOP")
+        {
+            ConnectorBasicsPlugin.Log.LogWarning("Couldn't add assets because the guid is not assigned!");
+            return false;
+        }
+        __instance.loaders++;
+        // Ok why is it right here before??
+
+        string[] files = Directory.GetFiles(Path.Combine(thinkerAPI.moddedpath, __instance.modImIn, folder));
+        foreach (string text in files)
+        {
+            var actualPath = Path.Combine(__instance.modImIn, folder, text);
+            string extension = Path.GetExtension(actualPath);
+            if (extension.ToLower() == ".ogg" || extension.ToLower() == ".mp3" || extension.ToLower() == ".wav")
+            {
+                string fileNameWithoutExtension = Path.GetFileNameWithoutExtension(text);
+                // This is the worst way of sound object creation, where are the subtitle keys?
+                __instance.AddAsset(ObjectCreators.CreateSoundObject((AudioClip)__instance.GetAsset(fileNameWithoutExtension, typeof(AudioClip)), fileNameWithoutExtension, sos.typ, sos.col, subtitle ? 0f : -1f), fileNameWithoutExtension + "SO");
+            }
+        }
+
+        __instance.loaders--;
         return false;
     }
     [HarmonyPatch(typeof(thinkerAPI), nameof(thinkerAPI.LetWarningScreenContinue)), HarmonyPrefix]
@@ -62,8 +93,7 @@ internal class ThinkerAPIPatches
     [HarmonyPatch(typeof(thinkerAPI), nameof(thinkerAPI.WaitForWarnings), MethodType.Enumerator), HarmonyPostfix] // Gets called twice.
     static void GrabForStopping(IEnumerator __instance)
     {
-        if (ConnectorBasicsPlugin.thinkerAPICoroutine == null)
-            ConnectorBasicsPlugin.thinkerAPICoroutine = __instance;
+        thinkerAPI.Instance.StopCoroutine(__instance);
     }
 
     [HarmonyPatch(typeof(WindowPeeBugManager), nameof(WindowPeeBugManager.InitializeWPD)), HarmonyPrefix]

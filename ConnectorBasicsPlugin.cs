@@ -32,11 +32,9 @@ public class ConnectorBasicsPlugin : BaseUnityPlugin
     internal static bool Connected = false, Doings = false, CaptionsLoaded = false;
     internal static int prevStoppers = 0;
     internal static readonly Dictionary<RandomEvent, Tuple<RandomEvent, string, Type, SoundObject, SoundObject>> randomEventsToQueue = new();
-    internal static IEnumerator thinkerAPICoroutine;
     private void Awake()
     {
         Harmony harmony = new Harmony(PLUGIN_GUID);
-        thinkerAPI.Instance.StopAllCoroutines();
         thinkerAPI.WarningScreenLoaded = false;
         thinkerAPI.givemeaheadstart = false;
         prevStoppers = thinkerAPI.warningScreenBlockers;
@@ -46,10 +44,6 @@ public class ConnectorBasicsPlugin : BaseUnityPlugin
         {
             if (scene.buildIndex == 0 && !Doings)
             {
-                if (thinkerAPICoroutine != null)
-                    thinkerAPI.Instance.StopCoroutine(thinkerAPICoroutine);
-                else
-                    Log.LogWarning("Failed to grab the coroutine, what??");
                 foreach (var _enum in AccessTools.AllTypes().Where(x => x.IsEnum && assemblies.Contains(x.Assembly) && x.IsPublic)) // Found out how, but couldn't figure out HOW to exclude system & unity package enums.
                     harmony.Patch(AccessTools.Method(typeof(ENanmEXTENDED), nameof(ENanmEXTENDED.GetAnEnumThatDoesntExist), [typeof(string)], [_enum]), transpiler: new HarmonyMethod(AccessTools.Method(typeof(ThinkerAPIPatches), "EnumFromMissedTheTexture")));
             }
@@ -79,7 +73,6 @@ public class ConnectorBasicsPlugin : BaseUnityPlugin
             yield return new WaitUntil(() => prevStoppers <= 0);
             Log.LogInfo("We got past through the stoppers.");
             thinkerAPI.WarningScreenPassed = true;
-
             int
                 prevNPCs = thinkerAPI.modNPCs.Count,
                 prevItems = thinkerAPI.modItems.Count,
@@ -88,32 +81,39 @@ public class ConnectorBasicsPlugin : BaseUnityPlugin
                 prevRooms = thinkerAPI.modRooms.Count,
                 prevPosters = thinkerAPI.modPosters.Count;
             bool modified = true;
-            yield return new WaitUntil(() =>
+            IEnumerator WaitUntilFor() // Alternate solution because the loading screen will crash by a `yield return null`
             {
-                modified = false;
-                if (prevNPCs != thinkerAPI.modNPCs.Count
-                    || prevItems != thinkerAPI.modItems.Count
-                    || prevEvents != thinkerAPI.modEvents.Count
-                    || prevStructures != thinkerAPI.modObjects.Count
-                    || prevRooms != thinkerAPI.modRooms.Count
-                    || prevPosters != thinkerAPI.modPosters.Count)
-                    modified = true;
-                prevNPCs = thinkerAPI.modNPCs.Count;
-                prevItems = thinkerAPI.modItems.Count;
-                prevEvents = thinkerAPI.modEvents.Count;
-                prevStructures = thinkerAPI.modObjects.Count;
-                prevRooms = thinkerAPI.modRooms.Count;
-                prevPosters = thinkerAPI.modPosters.Count;
-                return modified;
-            });
+                while (modified)
+                {
+                    yield return new WaitForSeconds(1f);
+                    modified = false;
+                    if (prevNPCs != thinkerAPI.modNPCs.Count
+                        || prevItems != thinkerAPI.modItems.Count
+                        || prevEvents != thinkerAPI.modEvents.Count
+                        || prevStructures != thinkerAPI.modObjects.Count
+                        || prevRooms != thinkerAPI.modRooms.Count
+                        || prevPosters != thinkerAPI.modPosters.Count)
+                        modified = true;
+                    prevNPCs = thinkerAPI.modNPCs.Count;
+                    prevItems = thinkerAPI.modItems.Count;
+                    prevEvents = thinkerAPI.modEvents.Count;
+                    prevStructures = thinkerAPI.modObjects.Count;
+                    prevRooms = thinkerAPI.modRooms.Count;
+                    prevPosters = thinkerAPI.modPosters.Count;
+                    yield return null;
+                }
+            }
+            yield return StartCoroutine(WaitUntilFor());
+            
             thinkerAPI.FileListPassed = true;
+            var dummyMenu = new GameObject("Menu", typeof(DummyMenu));
             Log.LogInfo("We got past through checks.");
 
             foreach (BasicNPCTemplate _npc in thinkerAPI.modNPCs)
             {
                 NPC npc = thinkerAPI.CreateNPC(_npc);
-                npc.name = _npc.name;
-                _npc.moh.AddAsset(npc, _npc.enumname + "NPCObject");
+                npc.gameObject.name = _npc.name;
+                _npc.moh.AddAsset(npc, $"{_npc.enumname}NPCObject");
                 WindowPeeBugManager.npcs.Add(npc);
             }
 
@@ -121,8 +121,7 @@ public class ConnectorBasicsPlugin : BaseUnityPlugin
             {
                 ItemObject itemobject = thinkerAPI.CreateItem(_itemobject);
                 itemobject.name = _itemobject.enumName;
-                _itemobject.moh.AddAsset(itemobject, _itemobject.enumName + "ItemObject");
-                Singleton<PlayerFileManager>.Instance.itemObjects.Add(itemobject);
+                _itemobject.moh.AddAsset(itemobject, $"{_itemobject.enumName}ItemObject");
                 WindowPeeBugManager.items.Add(itemobject);
             }
 
@@ -148,54 +147,64 @@ public class ConnectorBasicsPlugin : BaseUnityPlugin
                 GameObject.DestroyImmediate(randomEvent);
             }
 
+            DestroyImmediate(dummyMenu);
             // Note to most coders: ThinkerAPI does not use dictionary stuff for its own level generation management.
             Dictionary<Sprite, PosterObject> postersCreated = new();
             GeneratorManagement.Register(this, GenerationModType.Addend, (title, num, sceneObject) =>
             {
                 var meta = sceneObject.GetMeta();
                 if (meta == null || (!meta.tags.Contains("main") && !meta.tags.Contains("endless"))) return;
-                foreach (BasicNPCTemplate modNPC in thinkerAPI.modNPCs)
+                if (sceneObject.potentialNPCs != null)
                 {
-                    NPC actualNPC = (NPC)modNPC.moh.GetAsset(modNPC.enumname + "NPCObject");
-                    for (int i = 0; i < modNPC.floorNames.Count; i++)
+                    foreach (BasicNPCTemplate modNPC in thinkerAPI.modNPCs)
                     {
-                        if (modNPC.floorNames[i] == title)
+                        NPC actualNPC = (NPC)modNPC.moh.GetAsset($"{modNPC.enumname}NPCObject");
+                        for (int i = 0; i < modNPC.floorNames.Count; i++)
                         {
-                            sceneObject.potentialNPCs.Add(new WeightedNPC()
+                            if (modNPC.floorNames[i] == title)
                             {
-                                selection = actualNPC,
-                                weight = modNPC.floorWeights[i]
-                            });
+                                sceneObject.potentialNPCs.Add(new WeightedNPC()
+                                {
+                                    selection = actualNPC,
+                                    weight = modNPC.floorWeights[i]
+                                });
+                            }
                         }
                     }
                 }
-                foreach (BasicItemTemplate modItem in thinkerAPI.modItems)
+                if (sceneObject.shopItems != null)
                 {
-                    if (modItem.isShop)
+                    foreach (BasicItemTemplate modItem in thinkerAPI.modItems)
                     {
-                        ItemObject actualItemObject = (ItemObject)modItem.moh.GetAsset(modItem.enumName + "ItemObject");
-                        sceneObject.shopItems = sceneObject.shopItems.AddToArray(new WeightedItemObject()
+                        if (modItem.isShop)
                         {
-                            selection = actualItemObject,
-                            weight = modItem.shopWeight
-                        });
+                            ItemObject actualItemObject = (ItemObject)modItem.moh.GetAsset($"{modItem.enumName}ItemObject");
+                            sceneObject.shopItems = sceneObject.shopItems.AddToArray(new WeightedItemObject()
+                            {
+                                selection = actualItemObject,
+                                weight = modItem.shopWeight
+                            });
+                        }
                     }
                 }
                 foreach (var levelObject in sceneObject.GetCustomLevelObjects())
                 {
                     if (levelObject.IsModifiedByMod(Info)) continue;
-                    foreach (BasicItemTemplate modItem in thinkerAPI.modItems)
+                    if (levelObject.potentialItems != null)
                     {
-                        ItemObject actualItemObject = (ItemObject)modItem.moh.GetAsset(modItem.enumName + "ItemObject");
-                        for (int i = 0; i < modItem.floorNames.Count; i++)
+                        foreach (BasicItemTemplate modItem in thinkerAPI.modItems)
                         {
-                            if (modItem.floorNames[i] == title)
+                            ItemObject actualItemObject = (ItemObject)modItem.moh.GetAsset(modItem.enumName + "ItemObject");
+                            for (int i = 0; i < modItem.floorNames.Count; i++)
                             {
-                                levelObject.potentialItems = levelObject.potentialItems.AddToArray(new WeightedItemObject()
+                                if (modItem.floorNames[i] == title)
                                 {
-                                    selection = actualItemObject,
-                                    weight = modItem.weights[i]
-                                });
+                                    levelObject.potentialItems = levelObject.potentialItems.AddToArray(new WeightedItemObject()
+                                    {
+                                        selection = actualItemObject,
+                                        weight = modItem.weights[i]
+                                    });
+                                }
                             }
                         }
                     }
@@ -273,16 +282,15 @@ public class ConnectorBasicsPlugin : BaseUnityPlugin
                     levelObject.MarkAsModifiedByMod(Info);
                 }
             });
+
+            Connected = true;
+            #endregion
+            yield return new WaitUntil(() => Connected);
             if (thinkerAPI.captionpaths.Count > 0)
             {
                 thinkerAPI.LoadSavedCaptions();
                 thinkerAPI.captionpaths.Clear();
             }
-
-            Connected = true;
-            #endregion
-            yield return new WaitUntil(() => Connected);
-            AccessTools.Method(typeof(thinkerAPI), "LoadSavedCaptions").Invoke(null, []);
             CaptionsLoaded = true;
             yield return "Adding save handlers and scene generator enqueues...";
             foreach (var thinkPlugins in Chainloader.PluginInfos.Values)
@@ -340,5 +348,18 @@ public class ConnectorBasicsPlugin : BaseUnityPlugin
         LoadingEvents.RegisterOnAssetsLoaded(Info, FloorStuff.LoadBaseGameFloors, LoadingEventOrder.Start); // Due to Fragile Windows...
         LoadingEvents.RegisterOnAssetsLoaded(Info, Postdoings(), LoadingEventOrder.Pre);
         LoadingEvents.RegisterOnAssetsLoaded(Info, Savefixes(), LoadingEventOrder.Final);
+    }
+}
+
+internal class DummyMenu : MainMenu
+{
+    private void Start()
+    {
+
+    }
+
+    public new void UpdateNotif()
+    {
+
     }
 }
