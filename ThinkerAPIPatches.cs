@@ -14,7 +14,6 @@ using System.Reflection;
 using System.Reflection.Emit;
 using ThinkerAPI;
 using UnityEngine;
-using UnityEngine.UIElements.UIR;
 
 namespace APIConnector;
 
@@ -64,6 +63,35 @@ internal class ThinkerAPIPatches
     [HarmonyPatch(typeof(WindowPeeBugManager), nameof(WindowPeeBugManager.InitializeWPD)), HarmonyPrefix]
     static bool DoExtraStuffPlusPinedebugSupportInit() => ConnectorBasicsPlugin.Connected; // Considering that his code is that messy...
 
+    [HarmonyPatch(typeof(MassObjectHolder), nameof(MassObjectHolder.AddAssetFolder)), HarmonyPrefix]
+    static bool RedirectCoroutine(string folderpath, MassObjectHolder __instance)
+    {
+        var modImIn = (string)modItsIn.GetValue(__instance);
+        if (modImIn == "NULLMODEXCEPTIONABCDEFGHIJKLMNOP") return false;
+        IEnumerator AddAssetolder(string folderpath)
+        {
+            var loaders = (int)_loaders.GetValue(__instance);
+            _loaders.SetValue(__instance, loaders++);
+
+            string[] asset = Directory.GetFiles(Path.Combine(thinkerAPI.moddedpath, modImIn, folderpath));
+            string[] array = asset;
+            foreach (string s in array)
+            {
+                var actualPath = Path.Combine(modImIn, folderpath, s);
+                string extension = Path.GetExtension(actualPath); // Do better.
+                if (extension.ToLower() == ".png")
+                    yield return thinkerAPI.Instance.StartCoroutine(__instance.AddASprite(actualPath));
+                else if (extension.ToLower() == ".ogg" || extension.ToLower() == ".mp3" || extension.ToLower() == ".wav")
+                    yield return thinkerAPI.Instance.StartCoroutine(__instance.AddAClip(actualPath));
+            }
+
+            loaders = (int)_loaders.GetValue(__instance);
+            _loaders.SetValue(__instance, loaders--);
+        }
+        thinkerAPI.Instance.StartCoroutine(AddAssetolder(folderpath));
+        return false;
+    }
+
     [HarmonyPatch]
     static IEnumerable<CodeInstruction> EnumFromMissedTheTexture(IEnumerable<CodeInstruction> instructions)
     {
@@ -83,6 +111,7 @@ internal class ThinkerAPIPatches
     [HarmonyPatch(typeof(thinkerAPI), "LoadSavedCaptions"), HarmonyPrefix]
     static bool LoadDaCaptions(ref List<string> ___captionpaths)
     {
+        if (ConnectorBasicsPlugin.CaptionsLoaded) return false; // BUT WHY INVOKE THIS AFTER PRELOAD??
         foreach (string captionpath in ___captionpaths)
         {
             string path = Path.Combine(captionpath, "Captions");
@@ -92,28 +121,8 @@ internal class ThinkerAPIPatches
                 ConnectorBasicsPlugin.Log.LogInfo($"Localization path {Path.GetDirectoryName(path)} has no captions!");
             else
             {
-                AssetLoader.LocalizationFromFunction((lang) =>
-                {
-                    var dictionary = new Dictionary<string, string>();
-                    string[] array = files;
-                    foreach (string path2 in array)
-                    {
-                        LocalizationData localizationData = null;
-                        localizationData = JsonUtility.FromJson<LocalizationData>(File.ReadAllText(path2));
-                        for (int j = 0; j < localizationData.items.Length; j++)
-                        {
-                            if (!dictionary.ContainsKey(localizationData.items[j].key))
-                            {
-                                dictionary.Add(localizationData.items[j].key, localizationData.items[j].value);
-                            }
-                            else
-                            {
-                                dictionary[localizationData.items[j].key] = localizationData.items[j].value;
-                            }
-                        }
-                    }
-                    return dictionary;
-                });
+                foreach (string lpath in files)
+                    AssetLoader.LocalizationFromFile(lpath, Language.English);
             }
         }
         return false;
@@ -183,6 +192,13 @@ internal class ThinkerAPIPatches
             .SetSprites(bit.smallSprite, bit.largeSprite)
             .SetShopPrice(bit.shopPrice)
             .SetGeneratorCost(bit.genCost);
+        ItemFlags flags = ItemFlags.None;
+        var fields = bit.itemType.GetFields(BindingFlags.Default | BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).ToList();
+        var methods = bit.itemType.GetMethods(BindingFlags.Default | BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).ToList();
+        if (bit.itemType == typeof(Item) || !methods.Exists(x => x.Name == "Use"))
+            flags |= ItemFlags.NoUses;
+        if (fields.Exists(x => x.FieldType.Equals(typeof(Entity))))
+            flags |= ItemFlags.CreatesEntity;
         if (bit.pickup != null)
             builder.SetPickupSound(bit.pickup);
         if (bit.instantuse)

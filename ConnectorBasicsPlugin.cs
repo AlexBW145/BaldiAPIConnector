@@ -26,10 +26,10 @@ public class ConnectorBasicsPlugin : BaseUnityPlugin
 {
     private const string PLUGIN_GUID = "alexbw145.bbplus.apiconnector";
     private const string PLUGIN_NAME = "ThinkerAPI + MTM101API Connector";
-    private const string PLUGIN_VERSION = "0.2.1.2";
+    private const string PLUGIN_VERSION = "0.2.1.3";
     internal static ManualLogSource Log = new ManualLogSource("BaldiAPIConnector");
 
-    internal static bool Connected = false, Doings = false;
+    internal static bool Connected = false, Doings = false, CaptionsLoaded = false;
     internal static int prevStoppers = 0;
     internal static readonly Dictionary<RandomEvent, Tuple<RandomEvent, string, Type, SoundObject, SoundObject>> randomEventsToQueue = new();
     private void Awake()
@@ -41,8 +41,14 @@ public class ConnectorBasicsPlugin : BaseUnityPlugin
         prevStoppers = thinkerAPI.warningScreenBlockers;
         thinkerAPI.warningScreenBlockers = 0;
         Assembly[] assemblies = [Assembly.GetAssembly(typeof(Baldi)), ..AccessTools.AllTypes().Where(x => x.IsSubclassOf(typeof(BaseUnityPlugin))).Select(x => x.Assembly)]; // So I did this instead??
-        foreach (var _enum in AccessTools.AllTypes().Where(x => x.IsEnum && assemblies.Contains(x.Assembly) && x.IsPublic)) // Found out how, but couldn't figure out HOW to exclude system & unity package enums.
-            harmony.Patch(AccessTools.Method(typeof(ENanmEXTENDED), nameof(ENanmEXTENDED.GetAnEnumThatDoesntExist), [typeof(string)], [_enum]), transpiler: new HarmonyMethod(AccessTools.Method(typeof(ThinkerAPIPatches), "EnumFromMissedTheTexture")));
+        SceneManager.sceneLoaded += (scene, mode) =>
+        {
+            if (scene.buildIndex == 0 && !Doings)
+            {
+                foreach (var _enum in AccessTools.AllTypes().Where(x => x.IsEnum && assemblies.Contains(x.Assembly) && x.IsPublic)) // Found out how, but couldn't figure out HOW to exclude system & unity package enums.
+                    harmony.Patch(AccessTools.Method(typeof(ENanmEXTENDED), nameof(ENanmEXTENDED.GetAnEnumThatDoesntExist), [typeof(string)], [_enum]), transpiler: new HarmonyMethod(AccessTools.Method(typeof(ThinkerAPIPatches), "EnumFromMissedTheTexture")));
+            }
+        };
         harmony.PatchAllConditionals();
         // The generics are hardmode...
         if (Chainloader.PluginInfos.ContainsKey("OurWindowsFragiled"))
@@ -271,6 +277,10 @@ public class ConnectorBasicsPlugin : BaseUnityPlugin
             Connected = true;
             #endregion
             yield return new WaitUntil(() => Connected);
+            DestroyImmediate(menu);
+            nameentry.name = "NameEntry";
+            AccessTools.Method(typeof(thinkerAPI), "LoadSavedCaptions").Invoke(null, []);
+            CaptionsLoaded = true;
             yield return "Adding save handlers and scene generator enqueues...";
             foreach (var thinkPlugins in Chainloader.PluginInfos.Values)
             {
@@ -315,10 +325,10 @@ public class ConnectorBasicsPlugin : BaseUnityPlugin
         }
         IEnumerator Savefixes()
         {
-            yield return 1 + (Chainloader.PluginInfos.ContainsKey("alexbw145.baldiplus.pinedebug") ? 1 : 0);
+            yield return 1 + ((Chainloader.PluginInfos.ContainsKey("alexbw145.baldiplus.pinedebug") || !MTM101BaldiDevAPI.SaveGamesEnabled) ? 1 : 0);
             yield return "Forcing MTM101API to regenerate tags";
             ModdedFileManager.Instance.RegenerateTags();
-            if (Chainloader.PluginInfos.ContainsKey("alexbw145.baldiplus.pinedebug"))
+            if (Chainloader.PluginInfos.ContainsKey("alexbw145.baldiplus.pinedebug") || !MTM101BaldiDevAPI.SaveGamesEnabled)
             {
                 yield return "Initializing WindowPeeDebug...";
                 WindowPeeBugManager.InitializeWPD(); // Due to PineDebug...

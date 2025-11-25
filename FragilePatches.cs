@@ -263,7 +263,13 @@ internal class FragilePatches
         thinkerAPI.LetWarningScreenContinue();
         LoadingEvents.RegisterOnAssetsLoaded(FragileWindowBase.Instance.Info, LoadingAssetsFragile(), LoadingEventOrder.Start);
         LoadingEvents.RegisterOnAssetsLoaded(FragileWindowBase.Instance.Info, LoadingStuffFragile(), LoadingEventOrder.Pre);
-        foreach (var _enum in AccessTools.AllTypes().Where(x => x.IsEnum && assemblies.Contains(x.Assembly) && x.IsPublic))
-            harmony.Patch(AccessTools.Method(typeof(brobowindowsmod.ENanmEXTENDED), nameof(brobowindowsmod.ENanmEXTENDED.GetAnEnumThatDoesntExist), [typeof(string)], [_enum]), transpiler: new HarmonyMethod(AccessTools.Method(typeof(FragilePatches), "Why")));
+        SceneManager.sceneLoaded += (scene, mode) =>
+        {
+            if (scene.buildIndex == 0 && !ConnectorBasicsPlugin.Doings)
+            {
+                foreach (var _enum in AccessTools.AllTypes().Where(x => x.IsEnum && assemblies.Contains(x.Assembly) && x.IsPublic))
+                    harmony.Patch(AccessTools.Method(typeof(brobowindowsmod.ENanmEXTENDED), nameof(brobowindowsmod.ENanmEXTENDED.GetAnEnumThatDoesntExist), [typeof(string)], [_enum]), transpiler: new HarmonyMethod(AccessTools.Method(typeof(FragilePatches), "Why")));
+            }
+        };
     }
 }
