@@ -12,6 +12,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
+using System.Xml.Linq;
 using ThinkerAPI;
 using UnityEngine;
 using UnityEngine.UIElements.UIR;
@@ -89,6 +90,16 @@ internal class ThinkerAPIPatches
         ConnectorBasicsPlugin.prevStoppers++;
         return false;
     }
+    [HarmonyPatch(typeof(MassObjectHolder), nameof(MassObjectHolder.isLoadingAssets)), HarmonyPrefix]
+    static bool DelayingPart(ref bool __result) // Breaking, but really soon?
+    {
+        if (!ConnectorBasicsPlugin.Doings)
+        {
+            __result = true;
+            return false;
+        }
+        return true;
+    }
 
     [HarmonyPatch(typeof(thinkerAPI), nameof(thinkerAPI.WaitForWarnings), MethodType.Enumerator), HarmonyPostfix] // Gets called twice.
     static void GrabForStopping(IEnumerator __instance)
@@ -116,23 +127,15 @@ internal class ThinkerAPIPatches
         };
     }
 
-    [HarmonyPatch(typeof(thinkerAPI), "LoadSavedCaptions"), HarmonyPrefix]
-    static bool LoadDaCaptions(ref List<string> ___captionpaths)
+    [HarmonyPatch(typeof(thinkerAPI), nameof(thinkerAPI.LoadSavedCaptions)), HarmonyPrefix]
+    static bool LoadDaCaptions()
     {
-        if (ConnectorBasicsPlugin.CaptionsLoaded) return false; // BUT WHY INVOKE THIS AFTER PRELOAD??
-        foreach (string captionpath in ___captionpaths)
+        foreach (string captionpath in thinkerAPI.captionpaths)
         {
             string path = Path.Combine(captionpath, "Captions");
-            string[] files = Directory.GetFiles(path);
-            
-            if (files.Length == 0)
-                ConnectorBasicsPlugin.Log.LogInfo($"Localization path {Path.GetDirectoryName(path)} has no captions!");
-            else
-            {
-                foreach (string lpath in files)
-                    AssetLoader.LocalizationFromFile(lpath, Language.English);
-            }
+            AssetLoader.LoadLocalizationFolder(path, Language.English);
         }
+        thinkerAPI.captionpaths.Clear();
         return false;
     }
 
@@ -216,5 +219,23 @@ internal class ThinkerAPIPatches
         // ThinkerAPI is missing `overrideDisabled` which Eco Friendly stupidly patches something so that it can be used in Pitstop FOR NO REASON.
         __result = builder.Build();
         return false;
+    }
+
+    [HarmonyPatch(typeof(BasicNPCTemplate), MethodType.Constructor, [typeof(MassObjectHolder), typeof(bool), typeof(WeightedRoomAsset[]), typeof(RoomCategory[]), typeof(bool), typeof(bool), typeof(bool), typeof(bool), typeof(bool), typeof(bool), typeof(bool), typeof(string), typeof(float), typeof(float), typeof(string), typeof(float), typeof(float), typeof(string), typeof(string), typeof(Texture2D), typeof(bool), typeof(List<string>), typeof(List<int>), typeof(Type), typeof(bool), typeof(bool)]), HarmonyPostfix]
+    static void ConstructNPC(ref BasicNPCTemplate __instance)
+    {
+        NPC npc = thinkerAPI.CreateNPC(__instance);
+        npc.gameObject.name = __instance.name;
+        __instance.moh.AddAsset(npc, $"{__instance.enumname}NPCObject");
+        WindowPeeBugManager.npcs.Add(npc);
+    }
+
+    [HarmonyPatch(typeof(BasicItemTemplate), MethodType.Constructor, [typeof(MassObjectHolder), typeof(Sprite), typeof(Sprite), typeof(int), typeof(List<string>), typeof(List<int>), typeof(int), typeof(SoundObject), typeof(string), typeof(string), typeof(string), typeof(bool), typeof(Type), typeof(bool), typeof(int)]), HarmonyPostfix]
+    static void ConstructItem(ref BasicItemTemplate __instance)
+    {
+        ItemObject itemobject = thinkerAPI.CreateItem(__instance);
+        itemobject.name = __instance.enumName;
+        __instance.moh.AddAsset(itemobject, $"{__instance.enumName}ItemObject");
+        WindowPeeBugManager.items.Add(itemobject);
     }
 }

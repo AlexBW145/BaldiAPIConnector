@@ -13,6 +13,7 @@ using System.Linq;
 using System.Reflection;
 using ThinkerAPI;
 using UnityEngine;
+using UnityEngine.Assertions.Must;
 using UnityEngine.SceneManagement;
 
 namespace APIConnector;
@@ -29,21 +30,32 @@ public class ConnectorBasicsPlugin : BaseUnityPlugin
     private const string PLUGIN_VERSION = "0.3.0.0";
     internal static ManualLogSource Log = new ManualLogSource("BaldiAPIConnector");
 
-    internal static bool Connected = false, Doings = false, CaptionsLoaded = false;
+    internal static bool Connected = false, Doings = false;
     internal static int prevStoppers = 0;
     internal static readonly Dictionary<RandomEvent, Tuple<RandomEvent, string, Type, SoundObject, SoundObject>> randomEventsToQueue = new();
     private void Awake()
     {
+        Log = Logger;
         Harmony harmony = new Harmony(PLUGIN_GUID);
         thinkerAPI.WarningScreenLoaded = false;
         thinkerAPI.givemeaheadstart = false;
         prevStoppers = thinkerAPI.warningScreenBlockers;
         thinkerAPI.warningScreenBlockers = 0;
         Assembly[] assemblies = [Assembly.GetAssembly(typeof(Baldi)), ..AccessTools.AllTypes().Where(x => x.IsSubclassOf(typeof(BaseUnityPlugin))).Select(x => x.Assembly)]; // So I did this instead??
+        List<PluginInfo> thinkerPlugins = new();
         SceneManager.sceneLoaded += (scene, mode) =>
         {
             if (scene.buildIndex == 0 && !Doings)
             {
+                foreach (var thinkPlugins in Chainloader.PluginInfos.Values)
+                {
+                    if (thinkPlugins.Metadata.GUID == thinkerAPI.Instance.Info.Metadata.GUID) continue;
+                    if (thinkPlugins.Instance.GetType().GetFields(BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic).ToList().Exists(x => x.FieldType.Equals(typeof(MassObjectHolder))))
+                    {
+                        thinkerPlugins.Add(thinkPlugins);
+                        thinkPlugins.Instance.StopAllCoroutines();
+                    }
+                }
                 foreach (var _enum in AccessTools.AllTypes().Where(x => x.IsEnum && assemblies.Contains(x.Assembly) && x.IsPublic)) // Found out how, but couldn't figure out HOW to exclude system & unity package enums.
                     harmony.Patch(AccessTools.Method(typeof(ENanmEXTENDED), nameof(ENanmEXTENDED.GetAnEnumThatDoesntExist), [typeof(string)], [_enum]), transpiler: new HarmonyMethod(AccessTools.Method(typeof(ThinkerAPIPatches), "EnumFromMissedTheTexture")));
             }
@@ -56,12 +68,12 @@ public class ConnectorBasicsPlugin : BaseUnityPlugin
 
         IEnumerator Postdoings()
         {
-            yield return 6;
+            yield return 6 + thinkerPlugins.Count;
             yield return "Connecting APIs...";
-            Doings = true;
             #region CONNECTION PROCESS
-            thinkerAPI.WarningScreenLoaded = true;
             thinkerAPI.assets.AddAssetFolder("WindowPeeBug");
+            if (FloorStuff.F1Lvl == null)
+                FloorStuff.LoadBaseGameFloors();
             thinkerAPI.openschoolBuilder = new GameObject("OpenSchoolBuilder").AddComponent<Structure_OpenSchoolThing>();
             thinkerAPI.openschoolBuilder.gameObject.ConvertToPrefab(true);
             thinkerAPI.noexitBuilder = new GameObject("NoExitBuilder").AddComponent<Structure_PushPlayerSomewhereRandom>();
@@ -69,7 +81,43 @@ public class ConnectorBasicsPlugin : BaseUnityPlugin
             thinkerAPI.infBuilder = new GameObject("InfBuilder").AddComponent<Structure_InfStamina>();
             thinkerAPI.infBuilder.gameObject.ConvertToPrefab(true);
 
-            yield return new WaitForSeconds(1f);
+            Doings = true;
+            thinkerAPI.WarningScreenLoaded = true;
+            thinkerAPI.WarningScreenPassed = true;
+            thinkerAPI.FileListPassed = true;
+            var dummy = new GameObject("Menu", typeof(DummyMenu));
+            foreach (var plugin in thinkerPlugins)
+            {
+                yield return $"Loading mod: {plugin.Metadata.GUID}";
+                if (plugin.Metadata.GUID == "OurWindowsFragiled") continue; // Cannot invoke fragile windows because it has multiple IEnumerators that does the same loading technique.
+                var delcaredMethods = AccessTools.GetDeclaredMethods(plugin.Instance.GetType());
+                if (!delcaredMethods.Exists(x => x.ReturnType.Equals(typeof(IEnumerator))))
+                {
+                    Log.LogWarning($"{plugin.Metadata.GUID} does not have an IEnumerator around itself, is it inherited inside of a function? Skipping!");
+                    continue;
+                }
+                var coroutines = delcaredMethods.Where(x => x.ReturnType.Equals(typeof(IEnumerator))).ToList();
+                IEnumerator coroutine = null;
+                if (coroutines.Exists(x => x.Name.ToLower() == "WaitForWarnings".ToLower()))
+                {
+                    var method = coroutines.First(x => x.Name.ToLower() == "WaitForWarnings".ToLower());
+                    coroutine = (IEnumerator)method.Invoke(method.IsStatic ? null : plugin.Instance, []);
+                }
+                else // Grabs the very first IEnumerator.
+                {
+                    var method = coroutines.First();
+                    coroutine = (IEnumerator)method.Invoke(method.IsStatic ? null : plugin.Instance, []);
+                }
+                if (coroutine == null)
+                {
+                    Log.LogWarning($"{plugin.Metadata.GUID} does not have an IEnumerator that actually uses the loading technique, skipping!");
+                    continue;
+                }
+                yield return StartCoroutine(coroutine);
+            }
+            DestroyImmediate(dummy);
+
+            /*yield return new WaitForSeconds(1f);
             yield return new WaitUntil(() => prevStoppers <= 0);
             Log.LogInfo("We got past through the stoppers.");
             thinkerAPI.WarningScreenPassed = true;
@@ -107,9 +155,11 @@ public class ConnectorBasicsPlugin : BaseUnityPlugin
             
             thinkerAPI.FileListPassed = true;
             var dummyMenu = new GameObject("Menu", typeof(DummyMenu));
-            Log.LogInfo("We got past through checks.");
+            modified = true;
+            yield return StartCoroutine(WaitUntilFor()); // Again!
+            Log.LogInfo("We got past through checks.");*/
 
-            foreach (BasicNPCTemplate _npc in thinkerAPI.modNPCs)
+            /*foreach (BasicNPCTemplate _npc in thinkerAPI.modNPCs)
             {
                 NPC npc = thinkerAPI.CreateNPC(_npc);
                 npc.gameObject.name = _npc.name;
@@ -123,9 +173,9 @@ public class ConnectorBasicsPlugin : BaseUnityPlugin
                 itemobject.name = _itemobject.enumName;
                 _itemobject.moh.AddAsset(itemobject, $"{_itemobject.enumName}ItemObject");
                 WindowPeeBugManager.items.Add(itemobject);
-            }
+            }*/
 
-            FieldInfo 
+            FieldInfo
                 _eventscript = AccessTools.DeclaredField(typeof(BasicEventTemplate), "eventscript"),
                 modItsIn = AccessTools.DeclaredField(typeof(MassObjectHolder), "modImIn");
             foreach (BasicEventTemplate _randomevent in thinkerAPI.modEvents) // This is not even worthy to create a random event when looking at how random events are created with ThinkerAPI.
@@ -147,7 +197,7 @@ public class ConnectorBasicsPlugin : BaseUnityPlugin
                 GameObject.DestroyImmediate(randomEvent);
             }
 
-            DestroyImmediate(dummyMenu);
+            //DestroyImmediate(dummyMenu);
             // Note to most coders: ThinkerAPI does not use dictionary stuff for its own level generation management.
             Dictionary<Sprite, PosterObject> postersCreated = new();
             GeneratorManagement.Register(this, GenerationModType.Addend, (title, num, sceneObject) =>
@@ -280,59 +330,38 @@ public class ConnectorBasicsPlugin : BaseUnityPlugin
                         }
                     }
                     levelObject.MarkAsModifiedByMod(Info);
+                    levelObject.MarkAsNeverUnload();
                 }
             });
 
             Connected = true;
             #endregion
             yield return new WaitUntil(() => Connected);
-            if (thinkerAPI.captionpaths.Count > 0)
-            {
-                thinkerAPI.LoadSavedCaptions();
-                thinkerAPI.captionpaths.Clear();
-            }
-            CaptionsLoaded = true;
+            thinkerAPI.LoadSavedCaptions();
             yield return "Adding save handlers and scene generator enqueues...";
-            foreach (var thinkPlugins in Chainloader.PluginInfos.Values)
+            foreach (var thinkPlugins in thinkerPlugins)
             {
-                if (thinkPlugins.Metadata.GUID == thinkerAPI.Instance.Info.Metadata.GUID) continue;
-                if (thinkPlugins.Instance.GetType().GetFields(BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic).ToList().Exists(x => x.FieldType.Equals(typeof(MassObjectHolder))))
+                ModdedSaveGame.AddSaveHandler(thinkPlugins);
+                Log.LogInfo($"Handling save for {thinkPlugins.Metadata.GUID}!");
+                HashSet<LevelObject> weAlreadyGotToThat = new HashSet<LevelObject>();
+                foreach (var scene in thinkPlugins.Instance.GetType().GetFields(BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic).ToList().FindAll(x => x.FieldType.Equals(typeof(SceneObject))))
                 {
-                    ModdedSaveGame.AddSaveHandler(thinkPlugins);
-                    Log.LogInfo($"Handling save for {thinkPlugins.Metadata.GUID}!");
-                    HashSet<LevelObject> weAlreadyGotToThat = new HashSet<LevelObject>();
-                    foreach (var scene in thinkPlugins.Instance.GetType().GetFields(BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic).ToList().FindAll(x => x.FieldType.Equals(typeof(SceneObject))))
+                    var gottenscene = (SceneObject)scene.GetValue(thinkPlugins.Instance);
+                    if (gottenscene == null)
                     {
-                        var gottenscene = (SceneObject)scene.GetValue(thinkPlugins.Instance);
-                        if (gottenscene == null)
-                        {
-                            Log.LogWarning($"SceneObject field {scene.Name} from {thinkPlugins.Metadata.GUID} is null! Skipping!");
-                            continue;
-                        }
-                        if (SceneObjectMetaStorage.Instance.Get(gottenscene) != null) continue;
-                        /*foreach (var levelObject in gottenscene.GetCustomLevelObjects()) // This is better... I think?
-                        {
-                            if ((int)levelObject.type >= 123 && ENanmEXTENDED.counts[typeof(LevelType)].names[(int)levelObject.type - 123] == extendedEnums[(int)levelObject.type - 123].ToStringExtended())
-                                levelObject.type = extendedEnums[(int)levelObject.type - 123];
-                            else if ((int)levelObject.type > 0 && (int)levelObject.type < 4) // Custom level objects that does not use a extended enum.
-                                levelObject.type = EnumExtensions.ExtendEnum<LevelType>("UnknownType_" + levelObject.name); // Not to be confused with assigning things horribly.
-                            weAlreadyGotToThat.Add(levelObject);
-                        }*/
-                        gottenscene.AddMeta(thinkPlugins.Instance, (gottenscene.levelTitle == "END" && gottenscene.manager is EndlessGameManager) ? ["endless"] : []);
-                        // `HideInInspector` (despite its actual purpose is not in during runtime) will make the connector consider the scene object unqueueable.
-                        if (!Attribute.IsDefined(scene, typeof(HideInInspector)))
-                        {
-                            GeneratorManagement.EnqueueGeneratorChanges(gottenscene);
-                            Log.LogInfo($"Enqueuing generation changes for {scene.Name} from {thinkPlugins.Metadata.GUID}!");
-                        }
+                        Log.LogWarning($"SceneObject field {scene.Name} from {thinkPlugins.Metadata.GUID} is null! Skipping!");
+                        continue;
+                    }
+                    if (SceneObjectMetaStorage.Instance.Get(gottenscene) != null) continue;
+                    gottenscene.AddMeta(thinkPlugins.Instance, (gottenscene.levelTitle == "END" && gottenscene.manager is EndlessGameManager) ? ["endless"] : []);
+                    // `HideInInspector` (despite its actual purpose is not in during runtime) will make the connector consider the scene object unqueueable.
+                    if (!Attribute.IsDefined(scene, typeof(HideInInspector)))
+                    {
+                        GeneratorManagement.EnqueueGeneratorChanges(gottenscene);
+                        Log.LogInfo($"Enqueuing generation changes for {scene.Name} from {thinkPlugins.Metadata.GUID}!");
                     }
                 }
             }
-            /*foreach (var levelObject in SceneObjectMetaStorage.Instance.FindAll(x => x.title == "F4" || x.title == "F5").SelectMany(x => x.value.GetCustomLevelObjects())) // Now I realized that I am forgetting something...
-            {
-                if ((int)levelObject.type >= 123 && ENanmEXTENDED.counts[typeof(LevelType)].names[(int)levelObject.type - 123] == extendedEnums[(int)levelObject.type - 123].ToStringExtended())
-                    levelObject.type = extendedEnums[(int)levelObject.type - 123];
-            }*/
         }
         IEnumerator Savefixes()
         {
@@ -345,7 +374,6 @@ public class ConnectorBasicsPlugin : BaseUnityPlugin
                 WindowPeeBugManager.InitializeWPD(); // Due to PineDebug...
             }
         }
-        LoadingEvents.RegisterOnAssetsLoaded(Info, FloorStuff.LoadBaseGameFloors, LoadingEventOrder.Start); // Due to Fragile Windows...
         LoadingEvents.RegisterOnAssetsLoaded(Info, Postdoings(), LoadingEventOrder.Pre);
         LoadingEvents.RegisterOnAssetsLoaded(Info, Savefixes(), LoadingEventOrder.Final);
     }

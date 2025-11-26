@@ -57,8 +57,8 @@ internal class FragilePatches
             if (Assets.Assets.Count == 0)
                 MTM101BaldiDevAPI.CauseCrash(FragileWindowBase.Instance.Info, new FileLoadException("Assets are not installed correctly!"));
 
-            while (Assets.isLoadingAssets())
-                yield return null;
+            ConnectorBasicsPlugin.Doings = true; // Yeah so...
+            yield return new WaitUntil(() => !Assets.isLoadingAssets());
 
             List<string> foldersToLoad = new List<string>
             {
@@ -104,13 +104,14 @@ internal class FragilePatches
                 }
             }
 
-            while (Assets.isLoadingAssets())
-                yield return null;
+            yield return new WaitUntil(() => !Assets.isLoadingAssets());
         }
         IEnumerator LoadingStuffFragile() // Manually do stuff in a cleaner way.
         {
             yield return 1;
             yield return "Welcome to Fragile Windows V3, where we break windows.";
+            if (FloorStuff.F1Lvl == null)
+                FloorStuff.LoadBaseGameFloors();
             FragileWindowBase f = FragileWindowBase.Instance;
             var Assets = FragileWindowBase.Instance.Assets;
             List<BasicSoundobjectTemplate> sos = new List<BasicSoundobjectTemplate>
@@ -233,14 +234,14 @@ internal class FragilePatches
             f.LoadSoundObjectsFromFolder("NPCs/MrDemolition", sos[3], subtitle: true);
             f.LoadSoundObjectsFromFolder("Items/MagnifyingGlass/Audio", sos[0], subtitle: false);
 
-            while (Assets.isLoadingAssets())
-                yield return null;
+            yield return new WaitUntil(() => !Assets.isLoadingAssets());
 
             LittleWindowGuy.InitWindowVariants();
             f.worked = true;
             f.PostersPlease();
-            while (Assets.isLoadingAssets())
-                yield return null;
+
+            yield return new WaitUntil(() => !Assets.isLoadingAssets());
+            ConnectorBasicsPlugin.Doings = false;
 
             List<BasicNPCTemplate> basicNPCTemplates = new List<BasicNPCTemplate>
         {
