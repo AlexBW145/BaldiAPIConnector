@@ -55,7 +55,10 @@ internal class FragilePatches
             yield return FragileWindowBase.Instance.AddAssetFolder("ExtraBreakSounds");
             var Assets = FragileWindowBase.Instance.Assets;
             if (Assets.Assets.Count == 0)
+            {
                 MTM101BaldiDevAPI.CauseCrash(FragileWindowBase.Instance.Info, new FileLoadException("Assets are not installed correctly!"));
+                yield break;
+            }
 
             ConnectorBasicsPlugin.Doings = true; // Yeah so...
             yield return new WaitUntil(() => !Assets.isLoadingAssets());
