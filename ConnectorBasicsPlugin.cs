@@ -107,7 +107,7 @@ public class ConnectorBasicsPlugin : BaseUnityPlugin
             foreach (var plugin in thinkerPlugins)
             {
                 yield return $"Loading mod: {plugin.Metadata.GUID}";
-                if (plugin.Metadata.GUID == "OurWindowsFragiled") continue; // Cannot invoke fragile windows because it has multiple IEnumerators that does the same loading technique.
+                if (plugin.Metadata.GUID == "OurWindowsFragiled") continue; // Cannot invoke fragile windows because it handles loading stuff very differently.
                 var delcaredMethods = AccessTools.GetDeclaredMethods(plugin.Instance.GetType());
                 if (!delcaredMethods.Exists(x => x.ReturnType.Equals(typeof(IEnumerator))))
                 {
