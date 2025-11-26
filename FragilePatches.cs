@@ -81,14 +81,9 @@ internal class FragilePatches
                 {
                     var actualPath = Path.Combine(path, s, ss);
                     if (s == "ExtraBreakSounds")
-                    {
                         FragileWindowBase.Instance.windowsoundcount++;
-                    }
-
-                    if (s == "Posters")
-                    {
+                    else if (s == "Posters")
                         FragileWindowBase.Instance.myPosterAssetNames.Add(Path.GetFileNameWithoutExtension(actualPath));
-                    }
 
                     string extension = Path.GetExtension(actualPath);
                     if (extension.ToLower() == ".png")
