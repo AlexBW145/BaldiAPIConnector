@@ -88,6 +88,22 @@ public class ConnectorBasicsPlugin : BaseUnityPlugin
             nameEntry.name = "HoldingOntoThat";
             var dummy = new GameObject("Menu", typeof(DummyMenu));
             string[] whatItActuallyIs = ["WaitForWarnings".ToLower(), "AssetLoadingWait".ToLower()];
+            Scene dummyWarnings = SceneManager.CreateScene("Warnings");
+            Scene currentScene = SceneManager.GetActiveScene();
+            IEnumerator Switcher() // Some mod has ended up checking for the warnings scene for some reason...
+            {
+                while (!Connected)
+                {
+                    yield return new WaitForSeconds(0.5f);
+                    SceneManager.SetActiveScene(dummyWarnings);
+                    yield return new WaitForSeconds(0.5f);
+                    SceneManager.SetActiveScene(currentScene);
+                    yield return null;
+                }
+                SceneManager.SetActiveScene(currentScene);
+                SceneManager.UnloadSceneAsync(dummyWarnings);
+            }
+            StartCoroutine(Switcher());
             foreach (var plugin in thinkerPlugins)
             {
                 yield return $"Loading mod: {plugin.Metadata.GUID}";
@@ -109,6 +125,7 @@ public class ConnectorBasicsPlugin : BaseUnityPlugin
                 {
                     var method = coroutines.First();
                     coroutine = (IEnumerator)method.Invoke(method.IsStatic ? null : plugin.Instance, []);
+                    Log.LogInfo(method.Name);
                 }
                 if (coroutine == null)
                 {
