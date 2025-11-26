@@ -13,7 +13,6 @@ using System.Linq;
 using System.Reflection;
 using ThinkerAPI;
 using UnityEngine;
-using UnityEngine.Assertions.Must;
 using UnityEngine.SceneManagement;
 
 namespace APIConnector;
@@ -85,7 +84,10 @@ public class ConnectorBasicsPlugin : BaseUnityPlugin
             thinkerAPI.WarningScreenLoaded = true;
             thinkerAPI.WarningScreenPassed = true;
             thinkerAPI.FileListPassed = true;
+            var nameEntry = GameObject.Find("NameEntry");
+            nameEntry.name = "HoldingOntoThat";
             var dummy = new GameObject("Menu", typeof(DummyMenu));
+            string[] whatItActuallyIs = ["WaitForWarnings".ToLower(), "AssetLoadingWait".ToLower()];
             foreach (var plugin in thinkerPlugins)
             {
                 yield return $"Loading mod: {plugin.Metadata.GUID}";
@@ -98,9 +100,9 @@ public class ConnectorBasicsPlugin : BaseUnityPlugin
                 }
                 var coroutines = delcaredMethods.Where(x => x.ReturnType.Equals(typeof(IEnumerator))).ToList();
                 IEnumerator coroutine = null;
-                if (coroutines.Exists(x => x.Name.ToLower() == "WaitForWarnings".ToLower()))
+                if (coroutines.Exists(x => whatItActuallyIs.Contains(x.Name.ToLower())))
                 {
-                    var method = coroutines.First(x => x.Name.ToLower() == "WaitForWarnings".ToLower());
+                    var method = coroutines.First(x => whatItActuallyIs.Contains(x.Name.ToLower()));
                     coroutine = (IEnumerator)method.Invoke(method.IsStatic ? null : plugin.Instance, []);
                 }
                 else // Grabs the very first IEnumerator.
@@ -115,6 +117,7 @@ public class ConnectorBasicsPlugin : BaseUnityPlugin
                 }
                 yield return StartCoroutine(coroutine);
             }
+            nameEntry.name = "NameEntry";
             DestroyImmediate(dummy);
 
             /*yield return new WaitForSeconds(1f);
@@ -352,6 +355,18 @@ public class ConnectorBasicsPlugin : BaseUnityPlugin
                         Log.LogWarning($"SceneObject field {scene.Name} from {thinkPlugins.Metadata.GUID} is null! Skipping!");
                         continue;
                     }
+                    if (gottenscene.levelObject != null && gottenscene.levelObject is not CustomLevelObject)
+                        gottenscene.levelObject = ConvertLevelObject(gottenscene.levelObject);
+                    if ((gottenscene.randomizedLevelObject?.Length ?? 0) != 0)
+                    {
+                        for (int i = 0; i < gottenscene.randomizedLevelObject.Length; i++)
+                        {
+                            var lvl = gottenscene.randomizedLevelObject[i].selection;
+                            if (lvl is not CustomLevelObject)
+                                gottenscene.randomizedLevelObject[i].selection = ConvertLevelObject(lvl);
+                        }
+                    }
+
                     if (SceneObjectMetaStorage.Instance.Get(gottenscene) != null) continue;
                     gottenscene.AddMeta(thinkPlugins.Instance, (gottenscene.levelTitle == "END" && gottenscene.manager is EndlessGameManager) ? ["endless"] : []);
                     // `HideInInspector` (despite its actual purpose is not in during runtime) will make the connector consider the scene object unqueueable.
@@ -376,6 +391,15 @@ public class ConnectorBasicsPlugin : BaseUnityPlugin
         }
         LoadingEvents.RegisterOnAssetsLoaded(Info, Postdoings(), LoadingEventOrder.Pre);
         LoadingEvents.RegisterOnAssetsLoaded(Info, Savefixes(), LoadingEventOrder.Final);
+    }
+
+    private CustomLevelObject ConvertLevelObject(LevelObject levelObject)
+    {
+        CustomLevelObject lvlObjectg = ScriptableObjectHelpers.CloneScriptableObject<LevelObject, CustomLevelObject>(levelObject);
+        lvlObjectg.name = levelObject.name;
+        Destroy(levelObject);
+        lvlObjectg.MarkAsNeverUnload();
+        return lvlObjectg;
     }
 }
 
