@@ -161,7 +161,7 @@ internal class ThinkerAPIPatches
     static bool AddToMetaDataNPC(ref BasicNPCTemplate bit, ref NPC __result)
     {
         var type = typeof(NPCBuilder<>).MakeGenericType(bit.npcType);
-        var builder = type.GetConstructor([typeof(PluginInfo)]).Invoke([Chainloader.PluginInfos[(string)modItsIn.GetValue(bit.moh)]]);
+        var builder = type.GetConstructor([typeof(PluginInfo)]).Invoke([Chainloader.PluginInfos[bit.moh.modImIn]]);
         type.GetMethod("SetName", [typeof(string)]).Invoke(builder, [bit.name]);
         type.GetMethod("SetEnum", [typeof(string)]).Invoke(builder, [bit.enumname]);
         type.GetMethod("SetPoster", [typeof(Texture2D), typeof(string), typeof(string)]).Invoke(builder, [bit.poster, bit.nameKey, bit.descKey]);
@@ -196,7 +196,7 @@ internal class ThinkerAPIPatches
     static bool AddToMetaDataItem(ref BasicItemTemplate bit, ref ItemObject __result)
     {
         var type = typeof(ItemBuilder);
-        var builder = new ItemBuilder(Chainloader.PluginInfos[(string)modItsIn.GetValue(bit.moh)])
+        var builder = new ItemBuilder(Chainloader.PluginInfos[bit.moh.modImIn])
             .SetNameAndDescription(bit.nameKey, bit.descKey)
             .SetEnum(bit.enumName)
             .SetSprites(bit.smallSprite, bit.largeSprite)

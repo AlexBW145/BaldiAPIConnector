@@ -204,7 +204,7 @@ public class ConnectorBasicsPlugin : BaseUnityPlugin
                 randomEventsToQueue.Remove(dummyToGrab.Item1);
                 var randomEvent = dummyToGrab.Item1;
                 var type = typeof(RandomEventBuilder<>).MakeGenericType(dummyToGrab.Item3);
-                var builder = type.GetConstructor([typeof(PluginInfo)]).Invoke([Chainloader.PluginInfos[(string)modItsIn.GetValue(_randomevent.moh)]]);
+                var builder = type.GetConstructor([typeof(PluginInfo)]).Invoke([Chainloader.PluginInfos[_randomevent.moh.modImIn]]);
                 type.GetMethod("SetName", [typeof(string)]).Invoke(builder, [dummyToGrab.Item2]);
                 type.GetMethod("SetEnum", [typeof(string)]).Invoke(builder, [dummyToGrab.Item2.Replace(" ", "").Replace("_", "")]);
                 type.GetMethod("SetSound", [typeof(SoundObject)]).Invoke(builder, [dummyToGrab.Item4]);
