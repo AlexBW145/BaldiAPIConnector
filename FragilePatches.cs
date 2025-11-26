@@ -205,8 +205,7 @@ internal class FragilePatches
             foreach (BasicItemTemplate bit in basicItemTemplates)
                 thinkerAPI.modItems.Add(bit);
 
-            while (Assets.isLoadingAssets())
-                yield return null;
+            new WaitUntil(() => !Assets.isLoadingAssets());
 
             // This is unclean, why did I leave this here?
             // Also uhh, `GetAsset` is not a generic method and does not return a generic object.
