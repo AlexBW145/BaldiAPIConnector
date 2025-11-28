@@ -51,20 +51,13 @@ internal class FragilePatches
         {
             yield return 1;
             yield return "Loading Fragile Assets..."; // Not to be confused with another of these methods, which does the same thing but with more stuff to implement.
-            yield return FragileWindowBase.Instance.AddAssetFolder("ETC");
-            yield return FragileWindowBase.Instance.AddAssetFolder("ExtraBreakSounds");
             var Assets = FragileWindowBase.Instance.Assets;
-            if (Assets.Assets.Count == 0)
-            {
-                MTM101BaldiDevAPI.CauseCrash(FragileWindowBase.Instance.Info, new FileLoadException("Assets are not installed correctly!"));
-                yield break;
-            }
 
             ConnectorBasicsPlugin.Doings = true; // Yeah so...
-            yield return new WaitUntil(() => !Assets.isLoadingAssets());
 
             List<string> foldersToLoad = new List<string>
             {
+                "ExtraBreakSounds", "ETC",
                 "Posters", "Items/WindowYTP", "Items/CupOLittleWindows", "Items/GlassShard", "Items/Stone", "Items/WindowConstructionKit", "Items/WindowBlaster", "Items/ShardSoda", "Items/SuperHammer", "Items/EdibleWindow",
                 "Items/PlaceableFloorWindow", "Items/WindowSuit", "Items/GlassCannon", "Items/MagnifyingGlass/Sprites", "Items/MagnifyingGlass/Audio", "WindowVariants/ClickableWindow", "WindowVariants/TrapWindow", "WindowVariants/DirtyWindow", "WindowVariants/TestWindow", "WindowVariants/PortalWindow",
                 "WindowVariants/MechanicalHammerWindow", "WindowVariants/LoudWindow", "WindowVariants/IceWindow", "WindowVariants/ConvenientWindow", "WindowVariants/LinkedWindow", "WindowVariants/ElectricWindow", "WindowVariants/PushyWindow", "WindowVariants/OnewayWindow", "WindowVariants/PlasticWindow", "WindowVariants/GiftingWindow",
@@ -89,8 +82,9 @@ internal class FragilePatches
                     if (extension.ToLower() == ".png")
                     {
                         Texture2D texture2D = AssetLoader.TextureFromFile(actualPath);
+                        texture2D.name = Path.GetFileNameWithoutExtension(actualPath);
                         Sprite sprite = AssetLoader.SpriteFromTexture2D(texture2D, Vector2.one / 2f, Mathf.Max(texture2D.width, texture2D.height));
-                        sprite.name = Path.GetFileNameWithoutExtension(actualPath);
+                        sprite.name = texture2D.name;
                         Assets.AddAsset(sprite);
                     }
                     else if (extension.ToLower() == ".ogg" || extension.ToLower() == ".mp3" || extension.ToLower() == ".wav")
@@ -103,11 +97,17 @@ internal class FragilePatches
             }
 
             yield return new WaitUntil(() => !Assets.isLoadingAssets());
+
+            if (Assets.Assets.Count == 0)
+            {
+                MTM101BaldiDevAPI.CauseCrash(FragileWindowBase.Instance.Info, new FileLoadException("Assets are not installed correctly!"));
+                yield break;
+            }
         }
         IEnumerator LoadingStuffFragile() // Manually do stuff in a cleaner way.
         {
             yield return 1;
-            yield return "Welcome to Fragile Windows V3, where we break windows.";
+            yield return "Welcome to Fragile Windows V3 where we break windows.";
             if (FloorStuff.F1Lvl == null)
                 FloorStuff.LoadBaseGameFloors();
             FragileWindowBase f = FragileWindowBase.Instance;
@@ -140,16 +140,16 @@ internal class FragilePatches
                 new BasicItemTemplate(Assets, (Sprite)f.GetAsset("magnifyingglassSmall"), (Sprite)f.GetAsset("magnifyingglassLarge"), 100, new List<string>(), new List<int>(), 20, null, "MagnifyingGlassName", "MagnifyingGlassDesc", "MagnifyingGlass", instantusea: false, typeof(ITM_Magnify), isShopa: false, 130)
             };
             var floorwindowbuilder = new GameObject("fwbuilder");
+            floorwindowbuilder.ConvertToPrefab(true);
             floorwindowbuilder.AddComponent<FloorWindowBuilder>();
-            thinkerAPI.MakePrefab(floorwindowbuilder, active: true);
             f.floorwindowbuilder = floorwindowbuilder;
             var windowdispenserbuilder = new GameObject("wdbuilder");
+            windowdispenserbuilder.ConvertToPrefab(true);
             windowdispenserbuilder.AddComponent<WindowDispenserBuilder>();
-            thinkerAPI.MakePrefab(windowdispenserbuilder, active: true);
             f.windowdispenserbuilder = windowdispenserbuilder;
             var windowSwapperbuilder = new GameObject("wrbuilder");
+            windowSwapperbuilder.ConvertToPrefab(true);
             windowSwapperbuilder.AddComponent<WindowReplacerStructureThing>();
-            thinkerAPI.MakePrefab(windowSwapperbuilder, active: true);
             f.windowSwapperbuilder = windowSwapperbuilder;
             List<BasicBuilderTemplate> basicObjectTemplates = new List<BasicBuilderTemplate>
             {
@@ -157,7 +157,7 @@ internal class FragilePatches
                 {
                     parameters = new StructureParameters
                     {
-                        chance = new float[1] { 1983f },
+                        chance = new float[1] { 1983f }, // This seems to be an overused joke...
                         minMax = new IntVector2[1]
                         {
                             new IntVector2(1, 1)
@@ -254,7 +254,103 @@ internal class FragilePatches
                 thinkerAPI.modNPCs.Add(bit);
 
             // I cannot believe that most of those functions are public in general...
-            f.GenerationAdditions();
+            GameObject greenRoomFunction = new GameObject();
+            greenRoomFunction.ConvertToPrefab(true);
+            greenRoomFunction.transform.position = new Vector3(5f, 5f, 5f);
+            greenRoomFunction.AddComponent<GrassRoomFunctionCreator>();
+            BasicObjectData basicObjectData = new BasicObjectData();
+            basicObjectData.position = greenRoomFunction.transform.position;
+            basicObjectData.prefab = greenRoomFunction.transform;
+            List<BasicRoomTemplate> list = new List<BasicRoomTemplate>();
+            list.Add(new BasicRoomTemplate(Assets, "Glass House", new List<WeightedRoomAsset> { f.CreateRoom("GlassHouse", ((Sprite)f.GetAsset("GlassHouseDoorOpen")).texture, ((Sprite)f.GetAsset("GlassHouseDoorClosed")).texture, 333, new List<Vector3>
+        {
+            new Vector3(0f, 0f, 12f),
+            new Vector3(1f, 0f, 4f),
+            new Vector3(2f, 0f, 4f),
+            new Vector3(3f, 0f, 4f),
+            new Vector3(4f, 0f, 6f),
+            new Vector3(0f, 1f, 9f),
+            new Vector3(1f, 1f, 0f),
+            new Vector3(2f, 1f, 0f),
+            new Vector3(3f, 1f, 0f),
+            new Vector3(4f, 1f, 3f),
+            new Vector3(1f, 2f, 9f),
+            new Vector3(2f, 2f, 1f),
+            new Vector3(3f, 2f, 3f)
+        }, new List<IntVector2>
+        {
+            new IntVector2(0, 0),
+            new IntVector2(4, 0)
+        }, Color.cyan, new List<BasicObjectData>()) }, 1, 2, 0.9f, new WeightedTexture2D[1] { thinkerAPI.CreateWeightedTexture2D(((Sprite)f.GetAsset("GlassHouseWall")).texture, 1983) }, new WeightedTexture2D[1] { thinkerAPI.CreateWeightedTexture2D(((Sprite)f.GetAsset("GlassHouseFloor")).texture, 1983) }, new WeightedTexture2D[1] { thinkerAPI.CreateWeightedTexture2D(((Sprite)f.GetAsset("GlassHouseCeiling")).texture, 1983) }, new List<string> { "F1", "F2", "F3", "F5" }));
+            list.Add(new BasicRoomTemplate(Assets, "Grass House", new List<WeightedRoomAsset> { f.CreateRoom("GrassHouse", ((Sprite)f.GetAsset("GrassHouseDoorOpen")).texture, ((Sprite)f.GetAsset("GrassHouseDoorClosed")).texture, 222, new List<Vector3>
+        {
+            new Vector3(0f, 0f, 12f),
+            new Vector3(1f, 0f, 4f),
+            new Vector3(2f, 0f, 4f),
+            new Vector3(3f, 0f, 4f),
+            new Vector3(4f, 0f, 4f),
+            new Vector3(5f, 0f, 4f),
+            new Vector3(6f, 0f, 4f),
+            new Vector3(7f, 0f, 4f),
+            new Vector3(8f, 0f, 4f),
+            new Vector3(9f, 0f, 4f),
+            new Vector3(10f, 0f, 6f),
+            new Vector3(0f, 1f, 8f),
+            new Vector3(1f, 1f, 0f),
+            new Vector3(2f, 1f, 0f),
+            new Vector3(3f, 1f, 0f),
+            new Vector3(4f, 1f, 0f),
+            new Vector3(5f, 1f, 0f),
+            new Vector3(6f, 1f, 0f),
+            new Vector3(7f, 1f, 0f),
+            new Vector3(8f, 1f, 0f),
+            new Vector3(9f, 1f, 0f),
+            new Vector3(10f, 1f, 2f),
+            new Vector3(0f, 2f, 9f),
+            new Vector3(1f, 2f, 1f),
+            new Vector3(2f, 2f, 1f),
+            new Vector3(3f, 2f, 1f),
+            new Vector3(4f, 2f, 1f),
+            new Vector3(5f, 2f, 1f),
+            new Vector3(6f, 2f, 1f),
+            new Vector3(7f, 2f, 1f),
+            new Vector3(8f, 2f, 1f),
+            new Vector3(9f, 2f, 1f),
+            new Vector3(10f, 2f, 3f)
+        }, new List<IntVector2>
+        {
+            new IntVector2(0, 0),
+            new IntVector2(4, 0)
+        }, Color.cyan, new List<BasicObjectData> { basicObjectData }) }, 1, 2, 0.9f, new WeightedTexture2D[1] { thinkerAPI.CreateWeightedTexture2D(((Sprite)f.GetAsset("GlassHouseWall")).texture, 1983) }, new WeightedTexture2D[1] { thinkerAPI.CreateWeightedTexture2D(((Sprite)f.GetAsset("GlassHouseFloor")).texture, 1983) }, new WeightedTexture2D[1] { thinkerAPI.CreateWeightedTexture2D(((Sprite)f.GetAsset("GlassHouseCeiling")).texture, 1983) }, new List<string> { "F1", "F2", "F3", "F4" }));
+            List<BasicRoomTemplate> list2 = list;
+            foreach (BasicRoomTemplate item in list2)
+                thinkerAPI.modRooms.Add(item);
+
+            WindowHelpers.AddWindowChance(0.15f);
+            WindowHelpers.MultiplyWindowChance(1.3f);
+            CustomLevelObject factory4 = SceneObjectMetaStorage.Instance.Get(FloorStuff.F4).value.GetCustomLevelObjects().First(x => x.type == LevelType.Factory);
+            CustomLevelObject factory5 = SceneObjectMetaStorage.Instance.Get(FloorStuff.F5).value.GetCustomLevelObjects().First(x => x.type == LevelType.Factory);
+            LevelObject window4 = f.MakeWindowWorld(factory4.MakeClone(), "WindowWorld_Lvl4");
+            LevelObject window5 = f.MakeWindowWorld(factory5.MakeClone(), "WindowWorld_Lvl5");
+            // Enum gets handled by a patch...
+            window4.MarkAsNeverUnload();
+            window5.MarkAsNeverUnload();
+            GeneratorManagement.Register(f, GenerationModType.Preparation, (title, num, sceneObject) =>
+            {
+                var meta = sceneObject.GetMeta();
+                if (((num == 3 && title == "F4") || (num == 4 && title == "F5")) && meta?.tags.Contains("main") == true)
+                    sceneObject.randomizedLevelObject = sceneObject.randomizedLevelObject.AddToArray(new WeightedLevelObject
+                    {
+                        selection = (num == 4 && title == "F5") ? window5 : window4,
+                        weight = 100
+                    });
+            });
+            f.grated = Object.Instantiate(FragileWindowBase.FindResourceOfName<Material>("WoodSimple"));
+            f.grated.name = "WindowLeveltypeGrates";
+            f.grated.mainTexture = ((Sprite)Assets.GetAsset("GlassFloor_Weak")).texture;
+            f.glassed = Object.Instantiate(FragileWindowBase.FindResourceOfName<Material>("FactoryCeiling"));
+            f.glassed.name = "WindowLeveltypeGlass";
+            f.glassed.mainTexture = ((Sprite)Assets.GetAsset("GlassHouseWall")).texture;
             Assets.LoadSomeCaptions(Path.Combine(thinkerAPI.moddedpath, "OurWindowsFragiled")); // But why??
         }
         FragileWindowBase.Instance.StopAllCoroutines();
