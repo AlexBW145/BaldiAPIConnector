@@ -209,6 +209,8 @@ internal class ThinkerAPIPatches
             flags |= ItemFlags.NoUses;
         if (fields.Exists(x => x.FieldType.Equals(typeof(Entity))))
             flags |= ItemFlags.CreatesEntity;
+        if (bit.itemType.Equals(typeof(ITM_WPBButton)))
+            flags |= ItemFlags.Unobtainable;
         if (bit.pickup != null)
             builder.SetPickupSound(bit.pickup);
         if (bit.instantuse)
