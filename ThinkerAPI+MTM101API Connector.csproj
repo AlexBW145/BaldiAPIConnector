@@ -32,7 +32,7 @@
     <Reference Include="brobowindowsmod" Publicize="true">
       <HintPath>brobowindowsmod.dll</HintPath>
     </Reference>
-    <Reference Include="MTM101BaldAPI">
+    <Reference Include="MTM101BaldAPI" Publicize="true">
       <HintPath>D:\SteamLibrary\steamapps\common\Baldi's Basics Plus\BepInEx\plugins\MTM101BaldAPI.dll</HintPath>
     </Reference>
     <Reference Include="thinkerAPI" Publicize="true">

@@ -145,16 +145,39 @@ internal class ThinkerAPIPatches
     }
 
     private static FieldInfo modItsIn = AccessTools.DeclaredField(typeof(MassObjectHolder), "modImIn"),
-        _loaders = AccessTools.DeclaredField(typeof(MassObjectHolder), "loaders");
+        _loaders = AccessTools.DeclaredField(typeof(MassObjectHolder), "loaders"),
+        _eventJingleOverride = AccessTools.DeclaredField(typeof(RandomEvent), "eventJingleOverride"),
+        _eventIntro = AccessTools.DeclaredField(typeof(RandomEvent), "eventIntro");
     [HarmonyPatch(typeof(thinkerAPI), nameof(thinkerAPI.CreateEventObject)), HarmonyPrefix]
     static bool CreateRandomEventIntoMeta(string nm, Type t, SoundObject voiceline, SoundObject jingleOverride, ref GameObject __result)
     {
         var dummyPrefab = new GameObject("DummyRandomEvent_" + nm);
         dummyPrefab.ConvertToPrefab(true);
         var dummyEvent = dummyPrefab.AddComponent(t) as RandomEvent;
+        _eventJingleOverride.SetValue(dummyEvent, jingleOverride);
+        _eventIntro.SetValue(dummyEvent, voiceline);
         ConnectorBasicsPlugin.randomEventsToQueue.Add(dummyEvent, new(dummyEvent, nm, t, voiceline, jingleOverride));
         __result = dummyPrefab;
         return false;
+    }
+
+    [HarmonyPatch(typeof(BasicEventTemplate), MethodType.Constructor, [typeof(MassObjectHolder), typeof(string), typeof(RandomEvent), typeof(float), typeof(float), typeof(List<string>), typeof(List<int>)]), HarmonyPostfix]
+    static void ConstructRandomEvent(ref BasicEventTemplate __instance)
+    {
+        var randomEvent = __instance.eventscript;
+        var type = typeof(RandomEventBuilder<>).MakeGenericType(randomEvent.GetType());
+        var builder = type.GetConstructor([typeof(PluginInfo)]).Invoke([Chainloader.PluginInfos[__instance.moh.modImIn]]);
+        type.GetMethod("SetName", [typeof(string)]).Invoke(builder, [__instance.eventname]);
+        type.GetMethod("SetEnum", [typeof(string)]).Invoke(builder, [__instance.eventname.Replace(" ", "").Replace("_", "")]);
+        type.GetMethod("SetSound", [typeof(SoundObject)]).Invoke(builder, [(SoundObject)_eventIntro.GetValue(randomEvent)]);
+        type.GetMethod("SetMinMaxTime", [typeof(float), typeof(float)]).Invoke(builder, [__instance.min, __instance.max]);
+        var jingle = _eventJingleOverride.GetValue(randomEvent);
+        if (jingle != null)
+            type.GetMethod("SetJingle", [typeof(SoundObject)]).Invoke(builder, [(SoundObject)jingle]);
+        if (randomEvent.PotentialRoomAssets.Length != 0)
+            type.GetMethod("AddRoomAssets").Invoke(builder, [randomEvent.PotentialRoomAssets]);
+        __instance.eventscript = (RandomEvent)type.GetMethod("Build").Invoke(builder, []);
+        GameObject.DestroyImmediate(randomEvent);
     }
 
     [HarmonyPatch(typeof(thinkerAPI), nameof(thinkerAPI.CreateNPC)), HarmonyPrefix]

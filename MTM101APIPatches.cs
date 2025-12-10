@@ -1,4 +1,5 @@
-﻿using HarmonyLib;
+﻿using BepInEx;
+using HarmonyLib;
 using MTM101BaldAPI;
 using MTM101BaldAPI.AssetTools;
 using MTM101BaldAPI.ObjectCreation;
@@ -30,27 +31,9 @@ class EmumGetaroo
 [HarmonyPatch]
 class MTM101APIPatches
 {
-    /*[HarmonyPatch(typeof(EnumExtensions), nameof(EnumExtensions.ExtendEnum)), HarmonyPostfix]
-    static void AddToThinkerEnumList(string extendName, ref Enum __result)
+    [HarmonyPatch(typeof(LoadingEvents), "SortLoadingEvents"), HarmonyPostfix]
+    static void SortAgainIGuess(ref List<LoadingEvents.LoadingEvent> ___LoadingEventsPre) // Workaround due to IEnumerable containers and also they cannot be overwritten from outsiders...
     {
-        if (!ENanmEXTENDED.counts[__result.GetType()].names.Contains(extendName))
-            ENanmEXTENDED.counts[__result.GetType()].names.Add(extendName);
+        ___LoadingEventsPre = [___LoadingEventsPre.Find(x => x.info == thinkerAPI.Instance.Info), .. ___LoadingEventsPre.Where(x => x.info != thinkerAPI.Instance.Info && x.info.Metadata.GUID != "alexbw145.bbplus.apiconnector"), ___LoadingEventsPre.Find(x => x.info.Metadata.GUID == "alexbw145.bbplus.apiconnector")];
     }
-
-    [HarmonyPatch(typeof(NPCBuilder<NPC>), nameof(NPCBuilder<NPC>.Build)), HarmonyPostfix]
-    static void AddToThinkerNPCStorage(ref NPC __result, ref BepInEx.PluginInfo ___info, ref bool ___hasLooker,
-        ref List<WeightedRoomAsset> ___potentialRoomAssets, List<RoomCategory> ___spawnableRooms, ref bool ___hasTrigger, bool ___autoRotate,
-        ref bool ___preciseTarget, ref bool ___decelerate, ref bool ___ignorePlayerOnSpawn, ref bool ___grounded, ref string ___characterEnumName,
-        ref float ___fieldOfView, ref float ___maxSightDistance, ref float ___minAudioDistance, ref float ___maxAudioDistance, ref Texture2D ___posterTexture,
-        ref NPCFlags ___flags, ref bool ___useHeatmap) => 
-        thinkerAPI.modNPCs.Add(new BasicNPCTemplate(ConnectorBasicsPlugin.holder, ___hasLooker, ___potentialRoomAssets.ToArray(), ___spawnableRooms.ToArray(),
-            ___hasTrigger, ___autoRotate, ___preciseTarget, ___decelerate, false, ___ignorePlayerOnSpawn, !___grounded, ___characterEnumName,
-            ___fieldOfView >= 0f ? ___fieldOfView : 180f, ___maxSightDistance, __result.name, ___minAudioDistance, ___maxAudioDistance, "", "",
-            ___posterTexture, !___flags.HasFlag(NPCFlags.CanMove), [], [], __result.GetType(), ___useHeatmap, false));
-
-    [HarmonyPatch(typeof(ItemBuilder), nameof(ItemBuilder.Build)), HarmonyPostfix]
-    static void AddToThinkerItemStorage(ref ItemObject __result, ref string ___itemEnumName) => 
-        thinkerAPI.modItems.Add(new BasicItemTemplate(ConnectorBasicsPlugin.holder, __result.itemSpriteSmall, __result.itemSpriteLarge, __result.price, [], [], __result.value, __result.audPickupOverride,
-            __result.nameKey, __result.descKey, ___itemEnumName, !__result.addToInventory, __result.item.GetType(),
-            __result.price != 0, 0));*/
 }

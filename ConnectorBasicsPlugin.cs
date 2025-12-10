@@ -26,7 +26,7 @@ public class ConnectorBasicsPlugin : BaseUnityPlugin
 {
     private const string PLUGIN_GUID = "alexbw145.bbplus.apiconnector";
     private const string PLUGIN_NAME = "ThinkerAPI + MTM101API Connector";
-    private const string PLUGIN_VERSION = "0.3.0.0";
+    private const string PLUGIN_VERSION = "0.3.1.0";
     internal static ManualLogSource Log = new ManualLogSource("BaldiAPIConnector");
 
     internal static bool Connected = false, Doings = false;
@@ -46,13 +46,93 @@ public class ConnectorBasicsPlugin : BaseUnityPlugin
         {
             if (scene.buildIndex == 0 && !Doings)
             {
+                string[] whatItActuallyIs = ["WaitForWarnings".ToLower(), "AssetLoadingWait".ToLower()];
                 foreach (var thinkPlugins in Chainloader.PluginInfos.Values)
                 {
-                    if (thinkPlugins.Metadata.GUID == thinkerAPI.Instance.Info.Metadata.GUID) continue;
+                    if (thinkPlugins.Metadata.GUID == thinkerAPI.Instance.Info.Metadata.GUID)
+                    {
+                        IEnumerator InvokeGenerationChanges() // Workaround for a second and first loading event.
+                        {
+                            yield return 1;
+                            yield return "Setting up... (BaldiAPIConnector)";
+                            thinkerAPI.assets.AddAssetFolder("WindowPeeBug");
+                            if (FloorStuff.F1Lvl == null)
+                                FloorStuff.LoadBaseGameFloors();
+                            thinkerAPI.openschoolBuilder = new GameObject("OpenSchoolBuilder").AddComponent<Structure_OpenSchoolThing>();
+                            thinkerAPI.openschoolBuilder.gameObject.ConvertToPrefab(true);
+                            thinkerAPI.noexitBuilder = new GameObject("NoExitBuilder").AddComponent<Structure_PushPlayerSomewhereRandom>();
+                            thinkerAPI.noexitBuilder.gameObject.ConvertToPrefab(true);
+                            thinkerAPI.infBuilder = new GameObject("InfBuilder").AddComponent<Structure_InfStamina>();
+                            thinkerAPI.infBuilder.gameObject.ConvertToPrefab(true);
+
+                            Doings = true;
+                            thinkerAPI.WarningScreenLoaded = true;
+                            thinkerAPI.WarningScreenPassed = true;
+                            thinkerAPI.FileListPassed = true;
+                            var nameEntry = GameObject.Find("NameEntry");
+                            nameEntry.name = "HoldingOntoThat";
+                            var dummy = new GameObject("Menu", typeof(DummyMenu));
+                            Scene dummyWarnings = SceneManager.CreateScene("Warnings");
+                            Scene currentScene = SceneManager.GetActiveScene();
+                            IEnumerator Switcher() // Some mod has ended up checking for the warnings scene for some reason...
+                            {
+                                while (!Connected)
+                                {
+                                    yield return new WaitForSeconds(0.5f);
+                                    SceneManager.SetActiveScene(dummyWarnings);
+                                    yield return new WaitForSeconds(0.5f);
+                                    SceneManager.SetActiveScene(currentScene);
+                                    yield return null;
+                                }
+                                SceneManager.SetActiveScene(currentScene);
+                                SceneManager.UnloadSceneAsync(dummyWarnings);
+                                nameEntry.name = "NameEntry";
+                                DestroyImmediate(dummy);
+                            }
+                            StartCoroutine(Switcher());
+                            Log.LogInfo("Started connecting...");
+                        }
+                        LoadingEvents.RegisterOnAssetsLoaded(thinkerAPI.Instance.Info, InvokeGenerationChanges(), LoadingEventOrder.Pre);
+                        continue;
+                    }
                     if (thinkPlugins.Instance.GetType().GetFields(BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic).ToList().Exists(x => x.FieldType.Equals(typeof(MassObjectHolder))))
                     {
                         thinkerPlugins.Add(thinkPlugins);
                         thinkPlugins.Instance.StopAllCoroutines();
+
+                        if (thinkPlugins.Metadata.GUID == "OurWindowsFragiled") continue; // Cannot invoke fragile windows because it handles loading stuff very differently.
+                        var delcaredMethods = AccessTools.GetDeclaredMethods(thinkPlugins.Instance.GetType());
+                        if (!delcaredMethods.Exists(x => x.ReturnType.Equals(typeof(IEnumerator))))
+                        {
+                            Log.LogWarning($"{thinkPlugins.Metadata.GUID} does not have an IEnumerator around itself, is it inherited inside of a function? Skipping!");
+                            continue;
+                        }
+                        var coroutines = delcaredMethods.Where(x => x.ReturnType.Equals(typeof(IEnumerator))).ToList();
+                        IEnumerator coroutine = null;
+                        if (coroutines.Exists(x => whatItActuallyIs.Contains(x.Name.ToLower())))
+                        {
+                            var method = coroutines.First(x => whatItActuallyIs.Contains(x.Name.ToLower()));
+                            coroutine = (IEnumerator)method.Invoke(method.IsStatic ? null : thinkPlugins.Instance, []);
+                        }
+                        else // Grabs the very first IEnumerator.
+                        {
+                            var method = coroutines.First();
+                            coroutine = (IEnumerator)method.Invoke(method.IsStatic ? null : thinkPlugins.Instance, []);
+                            Log.LogInfo(method.Name);
+                        }
+                        if (coroutine == null)
+                        {
+                            Log.LogWarning($"{thinkPlugins.Metadata.GUID} does not have an IEnumerator that actually uses the loading technique, skipping!");
+                            continue;
+                        }
+                        IEnumerator NewLoaderThing()
+                        {
+                            yield return 2;
+                            yield return $"Loading mod... (BaldiAPIConnector)";
+
+                            yield return StartCoroutine(coroutine);
+                        }
+                        LoadingEvents.RegisterOnAssetsLoaded(thinkPlugins, NewLoaderThing(), LoadingEventOrder.Pre);
                     }
                 }
                 foreach (var _enum in AccessTools.AllTypes().Where(x => x.IsEnum && assemblies.Contains(x.Assembly) && x.IsPublic)) // Found out how, but couldn't figure out HOW to exclude system & unity package enums.
@@ -67,75 +147,10 @@ public class ConnectorBasicsPlugin : BaseUnityPlugin
 
         IEnumerator Postdoings()
         {
-            yield return 6 + thinkerPlugins.Count;
+            yield return 6;
             yield return "Connecting APIs...";
             #region CONNECTION PROCESS
-            thinkerAPI.assets.AddAssetFolder("WindowPeeBug");
-            if (FloorStuff.F1Lvl == null)
-                FloorStuff.LoadBaseGameFloors();
-            thinkerAPI.openschoolBuilder = new GameObject("OpenSchoolBuilder").AddComponent<Structure_OpenSchoolThing>();
-            thinkerAPI.openschoolBuilder.gameObject.ConvertToPrefab(true);
-            thinkerAPI.noexitBuilder = new GameObject("NoExitBuilder").AddComponent<Structure_PushPlayerSomewhereRandom>();
-            thinkerAPI.noexitBuilder.gameObject.ConvertToPrefab(true);
-            thinkerAPI.infBuilder = new GameObject("InfBuilder").AddComponent<Structure_InfStamina>();
-            thinkerAPI.infBuilder.gameObject.ConvertToPrefab(true);
-
-            Doings = true;
-            thinkerAPI.WarningScreenLoaded = true;
-            thinkerAPI.WarningScreenPassed = true;
-            thinkerAPI.FileListPassed = true;
-            var nameEntry = GameObject.Find("NameEntry");
-            nameEntry.name = "HoldingOntoThat";
-            var dummy = new GameObject("Menu", typeof(DummyMenu));
-            string[] whatItActuallyIs = ["WaitForWarnings".ToLower(), "AssetLoadingWait".ToLower()];
-            Scene dummyWarnings = SceneManager.CreateScene("Warnings");
-            Scene currentScene = SceneManager.GetActiveScene();
-            IEnumerator Switcher() // Some mod has ended up checking for the warnings scene for some reason...
-            {
-                while (!Connected)
-                {
-                    yield return new WaitForSeconds(0.5f);
-                    SceneManager.SetActiveScene(dummyWarnings);
-                    yield return new WaitForSeconds(0.5f);
-                    SceneManager.SetActiveScene(currentScene);
-                    yield return null;
-                }
-                SceneManager.SetActiveScene(currentScene);
-                SceneManager.UnloadSceneAsync(dummyWarnings);
-            }
-            StartCoroutine(Switcher());
-            foreach (var plugin in thinkerPlugins)
-            {
-                yield return $"Loading mod: {plugin.Metadata.GUID}";
-                if (plugin.Metadata.GUID == "OurWindowsFragiled") continue; // Cannot invoke fragile windows because it handles loading stuff very differently.
-                var delcaredMethods = AccessTools.GetDeclaredMethods(plugin.Instance.GetType());
-                if (!delcaredMethods.Exists(x => x.ReturnType.Equals(typeof(IEnumerator))))
-                {
-                    Log.LogWarning($"{plugin.Metadata.GUID} does not have an IEnumerator around itself, is it inherited inside of a function? Skipping!");
-                    continue;
-                }
-                var coroutines = delcaredMethods.Where(x => x.ReturnType.Equals(typeof(IEnumerator))).ToList();
-                IEnumerator coroutine = null;
-                if (coroutines.Exists(x => whatItActuallyIs.Contains(x.Name.ToLower())))
-                {
-                    var method = coroutines.First(x => whatItActuallyIs.Contains(x.Name.ToLower()));
-                    coroutine = (IEnumerator)method.Invoke(method.IsStatic ? null : plugin.Instance, []);
-                }
-                else // Grabs the very first IEnumerator.
-                {
-                    var method = coroutines.First();
-                    coroutine = (IEnumerator)method.Invoke(method.IsStatic ? null : plugin.Instance, []);
-                    Log.LogInfo(method.Name);
-                }
-                if (coroutine == null)
-                {
-                    Log.LogWarning($"{plugin.Metadata.GUID} does not have an IEnumerator that actually uses the loading technique, skipping!");
-                    continue;
-                }
-                yield return StartCoroutine(coroutine);
-            }
-            nameEntry.name = "NameEntry";
-            DestroyImmediate(dummy);
+            Log.LogInfo("Connecting completed!");
 
             /*yield return new WaitForSeconds(1f);
             yield return new WaitUntil(() => prevStoppers <= 0);
@@ -194,28 +209,6 @@ public class ConnectorBasicsPlugin : BaseUnityPlugin
                 _itemobject.moh.AddAsset(itemobject, $"{_itemobject.enumName}ItemObject");
                 WindowPeeBugManager.items.Add(itemobject);
             }*/
-
-            FieldInfo
-                _eventscript = AccessTools.DeclaredField(typeof(BasicEventTemplate), "eventscript"),
-                modItsIn = AccessTools.DeclaredField(typeof(MassObjectHolder), "modImIn");
-            foreach (BasicEventTemplate _randomevent in thinkerAPI.modEvents) // This is not even worthy to create a random event when looking at how random events are created with ThinkerAPI.
-            {
-                var dummyToGrab = randomEventsToQueue[_randomevent.eventscript];
-                randomEventsToQueue.Remove(dummyToGrab.Item1);
-                var randomEvent = dummyToGrab.Item1;
-                var type = typeof(RandomEventBuilder<>).MakeGenericType(dummyToGrab.Item3);
-                var builder = type.GetConstructor([typeof(PluginInfo)]).Invoke([Chainloader.PluginInfos[_randomevent.moh.modImIn]]);
-                type.GetMethod("SetName", [typeof(string)]).Invoke(builder, [dummyToGrab.Item2]);
-                type.GetMethod("SetEnum", [typeof(string)]).Invoke(builder, [dummyToGrab.Item2.Replace(" ", "").Replace("_", "")]);
-                type.GetMethod("SetSound", [typeof(SoundObject)]).Invoke(builder, [dummyToGrab.Item4]);
-                type.GetMethod("SetMinMaxTime", [typeof(float), typeof(float)]).Invoke(builder, [_randomevent.min, _randomevent.max]);
-                if (dummyToGrab.Item5 != null)
-                    type.GetMethod("SetJingle", [typeof(SoundObject)]).Invoke(builder, [dummyToGrab.Item5]);
-                if (randomEvent.PotentialRoomAssets.Length != 0)
-                    type.GetMethod("AddRoomAssets").Invoke(builder, [randomEvent.PotentialRoomAssets]);
-                _eventscript.SetValue(_randomevent, (RandomEvent)type.GetMethod("Build").Invoke(builder, []));
-                GameObject.DestroyImmediate(randomEvent);
-            }
 
             //DestroyImmediate(dummyMenu);
             // Note to most coders: ThinkerAPI does not use dictionary stuff for its own level generation management.
