@@ -156,7 +156,6 @@ internal class ThinkerAPIPatches
         var dummyEvent = dummyPrefab.AddComponent(t) as RandomEvent;
         _eventJingleOverride.SetValue(dummyEvent, jingleOverride);
         _eventIntro.SetValue(dummyEvent, voiceline);
-        ConnectorBasicsPlugin.randomEventsToQueue.Add(dummyEvent, new(dummyEvent, nm, t, voiceline, jingleOverride));
         __result = dummyPrefab;
         return false;
     }

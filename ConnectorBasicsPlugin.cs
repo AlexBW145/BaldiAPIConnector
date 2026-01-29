@@ -26,12 +26,11 @@ public class ConnectorBasicsPlugin : BaseUnityPlugin
 {
     private const string PLUGIN_GUID = "alexbw145.bbplus.apiconnector";
     private const string PLUGIN_NAME = "ThinkerAPI + MTM101API Connector";
-    private const string PLUGIN_VERSION = "0.3.1.0";
+    private const string PLUGIN_VERSION = "0.3.1.1";
     internal static ManualLogSource Log = new ManualLogSource("BaldiAPIConnector");
 
     internal static bool Connected = false, Doings = false;
     internal static int prevStoppers = 0;
-    internal static readonly Dictionary<RandomEvent, Tuple<RandomEvent, string, Type, SoundObject, SoundObject>> randomEventsToQueue = new();
     private void Awake()
     {
         Log = Logger;
