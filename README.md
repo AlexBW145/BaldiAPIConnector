@@ -1,13 +1,15 @@
 # BaldiAPIConnector
 The connector that connects MTM101DevAPI and ThinkerAPI into removing compatability conflicts
 
-Whatever happened, I can't do anything about it. Most of the ThinkerAPI code is messy but it does successfully patches the important stuffs like its enum extension system and its NPC/Item/Random Event creation.
+Whatever happened, I can't do anything about it. Most of the ThinkerAPI code is messy but the connector does successfully patches the important stuffs like ThinkerAPI's enum extension system and it's NPC/Item/Random Event creation.
+
+**Do not report crashes that are caused by incompatible API versions to the mod developers,** the maintainer of the connector (AlexBW145) is responsible for updating the connector to support later API versions.
 
 See for yourself for the results! It still works.
 
 # Prerequisites
 - [BepInEx 5](https://github.com/BepInEx/BepInEx/releases)
-- [MTM101BaldAPI 8.1](https://gamebanana.com/mods/383711)
+- [MTM101BaldAPI 10.X+](https://gamebanana.com/mods/383711)
 - [ThinkerAPI](https://gamebanana.com/mods/606386)
 - Fragile Windows (Somewhere...)
 - Visual Studio
